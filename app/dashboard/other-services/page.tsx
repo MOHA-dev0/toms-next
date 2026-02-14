@@ -6,13 +6,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api-client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, MapPin, Edit, Trash2, Map } from 'lucide-react';
-import { ServiceForm } from '@/components/services/ServiceForm';
+import { Search, Edit, Trash2, Layers } from 'lucide-react';
+import { OtherServiceForm } from '@/components/services/OtherServiceForm';
 import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog';
 import { DataCard } from '@/components/ui/data-card';
 import { toast } from 'sonner';
 
-export default function ServicesPage() {
+export default function OtherServicesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
@@ -20,30 +20,21 @@ export default function ServicesPage() {
 
   const queryClient = useQueryClient();
 
-  // Fetch Cities
-  const { data: cities = [] } = useQuery({
-    queryKey: ['cities'],
-    queryFn: async () => {
-      const res = await api.get('/api/cities');
-      return Array.isArray(res) ? res : [];
-    }
-  });
-
-  // Fetch Services
+  // Fetch Other Services
   const { data: services = [], isLoading } = useQuery({
-    queryKey: ['services'],
+    queryKey: ['other-services'],
     queryFn: async () => {
-      const res = await api.get('/api/services');
+      const res = await api.get('/api/other-services');
       return Array.isArray(res) ? res : [];
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return api.delete(`/api/services/${id}`);
+      return api.delete(`/api/other-services/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['other-services'] });
       toast.success('تم حذف الخدمة بنجاح');
       setDeleteId(null);
     },
@@ -71,8 +62,6 @@ export default function ServicesPage() {
     <div className="p-8 space-y-6 animate-in fade-in-50 duration-500">
       {/* Header & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-
-
         {/* Left Side: Search & Actions */}
         <div className="flex flex-col md:flex-row items-center gap-3 w-full">
           <div className="relative flex-1">
@@ -84,8 +73,7 @@ export default function ServicesPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <ServiceForm 
-            cities={cities} 
+          <OtherServiceForm 
             open={isFormOpen} 
             onOpenChange={handleCloseForm}
             initialData={editingService}
@@ -111,7 +99,7 @@ export default function ServicesPage() {
                key={service.id}
                title={service.nameAr}
                subtitle={service.nameEn}
-               icon={Map}
+               icon={Layers}
                actions={
                  <>
                    <Button 
@@ -133,10 +121,11 @@ export default function ServicesPage() {
                  </>
                }
                metadata={
-                 <div className="flex items-center gap-1 text-xs text-muted-foreground justify-end">
-                   <span>{service.city?.nameAr}</span>
-                   <MapPin className="w-3 h-3" />
-                 </div>
+                 service.descriptionAr && (
+                   <div className="text-xs text-muted-foreground mt-1">
+                     {service.descriptionAr}
+                   </div>
+                 )
                }
                footerLabel="التكلفة:"
                footerValue={service.purchasePrice}

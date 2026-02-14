@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useState } from 'react';
@@ -7,43 +8,24 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Plane, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { ROLE_NAMES } from '@/lib/constants';
 
 const loginSchema = z.object({
   email: z.string().email('البريد الإلكتروني غير صالح'),
   password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
 });
 
-const signupSchema = loginSchema.extend({
-  name: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
-  initial: z.string().length(1, 'الحرف الأول يجب أن يكون حرف واحد فقط'),
-  role: z.enum(['admin', 'sales', 'booking']),
-});
-
 export default function Auth() {
   const router = useRouter();
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const { toast } = useToast();
 
-  const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [initial, setInitial] = useState('');
-  const [role, setRole] = useState<'admin' | 'sales' | 'booking'>('sales');
-
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,70 +34,30 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      if (isLogin) {
-        const result = loginSchema.safeParse({ email, password });
-        if (!result.success) {
-          const fieldErrors: Record<string, string> = {};
-          const issues = result.error.issues;
-          issues.forEach((issue: any) => {
-            if (issue.path[0]) {
-              fieldErrors[issue.path[0] as string] = issue.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
-
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast({
-            title: 'خطأ في تسجيل الدخول',
-            description: error.message === 'Invalid login credentials' 
-              ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
-              : error.message,
-            variant: 'destructive',
-          });
-        } else {
-          router.push('/dashboard');
-        }
-      } else {
-        const result = signupSchema.safeParse({ email, password, name, initial, role });
-        if (!result.success) {
-          const fieldErrors: Record<string, string> = {};
-          const issues = result.error.issues;
-          issues.forEach((issue: any) => {
-            if (issue.path[0]) {
-              fieldErrors[issue.path[0] as string] = issue.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
-
-        const { error } = await signUp(email, password, name, initial.toUpperCase(), role);
-        if (error) {
-          if (error.message.includes('already registered')) {
-            toast({
-              title: 'خطأ في التسجيل',
-              description: 'هذا البريد الإلكتروني مسجل بالفعل',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'خطأ في التسجيل',
-              description: error.message,
-              variant: 'destructive',
-            });
+      const result = loginSchema.safeParse({ email, password });
+      if (!result.success) {
+        const fieldErrors: Record<string, string> = {};
+        result.error.issues.forEach((issue) => {
+          if (issue.path[0]) {
+            fieldErrors[issue.path[0] as string] = issue.message;
           }
-        } else {
-          toast({
-            title: 'تم التسجيل بنجاح',
-            description: 'يرجى التحقق من بريدك الإلكتروني لتأكيد الحساب',
-          });
-          setIsLogin(true);
-        }
+        });
+        setErrors(fieldErrors);
+        setIsLoading(false);
+        return;
+      }
+
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast({
+          title: 'خطأ في تسجيل الدخول',
+          description: error.message === 'Invalid login credentials' 
+            ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+            : error.message,
+          variant: 'destructive',
+        });
+      } else {
+        router.push('/dashboard');
       }
     } finally {
       setIsLoading(false);
@@ -125,89 +67,37 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex">
       {/* Left side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
+      <div className="flex-1 flex items-center justify-center p-8 bg-white">
+        <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-primary mb-4">
-              <Plane className="w-8 h-8 text-white rotate-45" />
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-blue-900/5 mb-6 text-blue-900 group">
+              <Plane className="w-10 h-10 rotate-45 transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-300" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {isLogin ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              {isLogin
-                ? 'أدخل بياناتك للدخول إلى النظام'
-                : 'أنشئ حسابك للوصول إلى نظام إدارة السياحة'}
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">تسجيل الدخول</h1>
+            <p className="text-gray-500">أدخل بياناتك للدخول إلى نظام TOMS</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="name">الاسم الكامل</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="أحمد محمد"
-                    className={errors.name ? 'border-destructive' : ''}
-                  />
-                  {errors.name && (
-                    <p className="text-xs text-destructive">{errors.name}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="initial">الحرف الأول (للمرجع)</Label>
-                    <Input
-                      id="initial"
-                      value={initial}
-                      onChange={(e) => setInitial(e.target.value.slice(0, 1).toUpperCase())}
-                      placeholder="A"
-                      maxLength={1}
-                      className={errors.initial ? 'border-destructive' : ''}
-                    />
-                    {errors.initial && (
-                      <p className="text-xs text-destructive">{errors.initial}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role">الدور</Label>
-                    <Select value={role} onValueChange={(v: any) => setRole(v)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">{ROLE_NAMES.admin}</SelectItem>
-                        <SelectItem value="sales">{ROLE_NAMES.sales}</SelectItem>
-                        <SelectItem value="booking">{ROLE_NAMES.booking}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
-            )}
-
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">البريد الإلكتروني</Label>
+              <Label htmlFor="email" className="text-sm font-semibold text-gray-700">البريد الإلكتروني</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@company.com"
-                className={errors.email ? 'border-destructive' : ''}
+                placeholder="name@company.com"
+                className={`h-12 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-900/20 ${errors.email ? 'border-destructive' : ''}`}
+                dir="ltr"
               />
               {errors.email && (
-                <p className="text-xs text-destructive">{errors.email}</p>
+                <p className="text-xs text-destructive mt-1">{errors.email}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">كلمة المرور</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="password">{`كلمة المرور`}</Label>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
@@ -215,69 +105,60 @@ export default function Auth() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className={errors.password ? 'border-destructive' : ''}
+                  className={`h-12 bg-gray-50/50 border-gray-100 rounded-xl focus:ring-2 focus:ring-blue-900/20 pr-10 ${errors.password ? 'border-destructive' : ''}`}
+                  dir="ltr"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-destructive">{errors.password}</p>
+                <p className="text-xs text-destructive mt-1">{errors.password}</p>
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-12 bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95" disabled={isLoading}>
               {isLoading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin ml-2" />
-                  جاري التحميل...
+                  <Loader2 className="w-5 h-5 animate-spin ml-2" />
+                  جاري تسجيل الدخول...
                 </>
-              ) : isLogin ? (
-                'تسجيل الدخول'
               ) : (
-                'إنشاء الحساب'
+                'تسجيل الدخول'
               )}
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setErrors({});
-              }}
-              className="text-sm text-primary hover:underline"
-            >
-              {isLogin ? 'ليس لديك حساب؟ سجل الآن' : 'لديك حساب بالفعل؟ سجل دخولك'}
-            </button>
-          </div>
+          <p className="mt-8 text-center text-sm text-gray-400">
+            لطلب صلاحية الوصول، يرجى التواصل مع مسؤول النظام
+          </p>
         </div>
       </div>
 
       {/* Right side - Hero */}
-      <div className="hidden lg:flex flex-1 bg-gradient-primary items-center justify-center p-12">
-        <div className="text-center text-white max-w-md">
-          <h2 className="text-4xl font-bold mb-4">نظام إدارة السياحة</h2>
-          <p className="text-lg text-white/80 mb-8">
-            منصة متكاملة لإدارة عروض الأسعار والحجوزات والقسائم بكل سهولة واحترافية
+      <div className="hidden lg:flex flex-1 bg-blue-900 items-center justify-center p-12 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+        <div className="relative z-10 text-center text-white max-w-md">
+          <h2 className="text-4xl font-extrabold mb-6">نظام TOMS للسياحة</h2>
+          <p className="text-lg text-blue-100/80 mb-10 leading-relaxed font-medium">
+            المنصة المتكاملة لإدارة عروض الأسعار والحجوزات والعمليات السياحية بكفاءة واحترافية عالية.
           </p>
-          <div className="grid grid-cols-3 gap-6 text-center">
-            <div>
-              <div className="text-3xl font-bold">100%</div>
-              <div className="text-sm text-white/70">عربي بالكامل</div>
+          <div className="grid grid-cols-3 gap-6">
+            <div className="p-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+              <div className="text-2xl font-bold mb-1">100%</div>
+              <div className="text-[10px] text-blue-200 uppercase tracking-wider">نظام محمي</div>
             </div>
-            <div>
-              <div className="text-3xl font-bold">24/7</div>
-              <div className="text-sm text-white/70">متاح دائماً</div>
+            <div className="p-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+              <div className="text-2xl font-bold mb-1">UI/UX</div>
+              <div className="text-[10px] text-blue-200 uppercase tracking-wider">واجهة عصرية</div>
             </div>
-            <div>
-              <div className="text-3xl font-bold">آمن</div>
-              <div className="text-sm text-white/70">حماية البيانات</div>
+            <div className="p-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+              <div className="text-2xl font-bold mb-1">Fast</div>
+              <div className="text-[10px] text-blue-200 uppercase tracking-wider">سرعة فائقة</div>
             </div>
           </div>
         </div>

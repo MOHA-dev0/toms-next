@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import api from '@/lib/api-client'
 
 export type AppRole = 'admin' | 'sales' | 'booking'
@@ -37,6 +38,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [role, setRole] = useState<AppRole | null>(null)
@@ -109,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setEmployee(null)
     setRole(null)
+    router.push('/auth')
   }
 
   const value = {

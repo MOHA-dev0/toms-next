@@ -12,6 +12,7 @@ import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-di
 import { useToast } from '@/hooks/use-toast';
 import api from '@/lib/api-client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DataCard } from '@/components/ui/data-card';
 
 interface City {
   id: string;
@@ -191,63 +192,66 @@ export default function HotelsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" dir="rtl">
               {filteredHotels.map((hotel) => (
-                <div key={hotel.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-gray-100 overflow-hidden group text-right">
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="font-semibold text-lg mb-1 text-gray-900">{hotel.nameAr}</h3>
-                        <div className="flex items-center text-muted-foreground text-sm gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {hotel.city?.nameAr}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-bold">
-                          {hotel.roomTypes?.length || 0} غرف
-                        </div>
-                        <Button 
-                          size="icon"
-                          variant="ghost" 
-                          className="h-8 w-8 rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
-                          onClick={() => handleOpenForm(hotel)}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          size="icon"
-                          variant="ghost" 
-                          className="h-8 w-8 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                          onClick={() => handleDelete(hotel)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2 pt-4 border-t border-gray-50">
-                      {hotel.roomTypes?.length > 0 ? (
-                        hotel.roomTypes.slice(0, 3).map((room, idx) => (
-                          <div key={idx} className="flex justify-between text-sm hover:bg-gray-50 p-2 rounded-lg transition-colors">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-700">{room.nameAr}</span>
-                              <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded uppercase border border-gray-200">{room.board}</span>
-                            </div>
-                            <span className="font-mono font-medium text-blue-700" dir="ltr">{room.basePrice} {room.currency}</span>
+                <DataCard
+                  key={hotel.id}
+                  title={hotel.nameAr}
+                  subtitle={hotel.city?.nameAr}
+                  icon={Building}
+                  actions={
+                    <>
+                      <Button 
+                        size="icon"
+                        variant="ghost" 
+                        className="h-8 w-8 rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                        onClick={() => handleOpenForm(hotel)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        size="icon"
+                        variant="ghost" 
+                        className="h-8 w-8 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                        onClick={() => handleDelete(hotel)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  }
+                  metadata={
+                    <div className="space-y-2">
+                       {hotel.roomTypes?.length > 0 ? (
+                         hotel.roomTypes.slice(0, 3).map((room, idx) => (
+                           <div key={idx} className="flex justify-between items-center text-sm p-1.5 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors border border-gray-100">
+                             <div className="flex items-center gap-2">
+                               <Badge variant="outline" className="text-[10px] h-5 bg-white font-normal text-muted-foreground border-gray-200">
+                                 {room.board}
+                               </Badge>
+                               <span className="font-medium text-gray-700 text-xs">{room.nameAr}</span>
+                             </div>
+                             <span className="font-mono font-bold text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded" dir="ltr">
+                               {room.basePrice} {room.currency}
+                             </span>
+                           </div>
+                         ))
+                       ) : (
+                         <div className="text-center py-4 text-xs text-muted-foreground bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                           لا توجد غرف مضافة
+                         </div>
+                       )}
+                       
+                       {hotel.roomTypes?.length > 3 && (
+                          <div className="text-center">
+                            <Badge variant="secondary" className="text-xs font-normal cursor-pointer hover:bg-gray-200 transition-colors">
+                              +{hotel.roomTypes.length - 3} المزيد
+                            </Badge>
                           </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-4 text-xs text-muted-foreground">
-                          لا توجد غرف مضافة
-                        </div>
-                      )}
-                      {hotel.roomTypes?.length > 3 && (
-                        <div className="text-xs text-blue-600 font-medium text-center pt-2 cursor-pointer hover:underline">
-                          +{hotel.roomTypes.length - 3} المزيد
-                        </div>
-                      )}
+                       )}
                     </div>
-                  </div>
-                </div>
+                  }
+                  footerLabel="عدد الغرف المتوفرة:"
+                  footerValue={hotel.roomTypes?.length || 0}
+                  footerValueSub="غرفة"
+                />
               ))}
             </div>
           )}

@@ -42,7 +42,7 @@ export const authService = {
       },
     })
 
-    const token = await generateToken(user.id)
+    const token = await generateToken(user.id, role)
 
     return {
       user: {
@@ -73,7 +73,7 @@ export const authService = {
       throw new Error('Invalid credentials')
     }
 
-    const token = await generateToken(user.id)
+    const token = await generateToken(user.id, user.userRoles[0]?.role)
 
     return {
       user: {

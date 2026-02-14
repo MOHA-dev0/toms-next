@@ -6,12 +6,13 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'secret')
 
 export interface JWTPayload {
   userId: string
+  role: string
   iat?: number
   exp?: number
 }
 
-export async function generateToken(userId: string): Promise<string> {
-  return new SignJWT({ userId })
+export async function generateToken(userId: string, role: string): Promise<string> {
+  return new SignJWT({ userId, role })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('1d')
     .sign(JWT_SECRET)

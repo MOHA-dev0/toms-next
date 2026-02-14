@@ -69,6 +69,36 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
         subtitle: 'إدارة الفنادق والغرف'
       };
     }
+    if (pathname === '/dashboard/services') {
+      return {
+        title: 'الخدمات',
+        subtitle: 'إدارة الخدمات والبرامج'
+      };
+    }
+    if (pathname === '/dashboard/other-services') {
+      return {
+        title: 'خدمات أخرى',
+        subtitle: 'إدارة الخدمات'
+      };
+    }
+    if (pathname === '/dashboard/companies') {
+      return {
+        title: 'الشركات',
+        subtitle: 'إدارة الشركات'
+      };
+    }
+    if (pathname === '/dashboard/agents') {
+      return {
+        title: 'الوكالات',
+        subtitle: 'إدارة الوكالات'
+      };
+    }
+    if (pathname === '/dashboard/employees') {
+      return {
+        title: 'الموظفين',
+        subtitle: 'إدارة الموظفين'
+      };
+    }
     return {
       title: 'TOMS',
       subtitle: ''

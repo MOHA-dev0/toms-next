@@ -52,16 +52,18 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Vouchers Card */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div>
-            <h3 className="text-3xl font-bold text-gray-900 mb-1">0</h3>
-            <p className="text-sm text-gray-500">القسائم</p>
+        {/* Vouchers Card - Only for Admin and Booking */}
+        {user?.role !== 'sales' && (
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+              <h3 className="text-3xl font-bold text-gray-900 mb-1">0</h3>
+              <p className="text-sm text-gray-500">القسائم</p>
+            </div>
+            <div className="h-12 w-12 bg-green-500 rounded-xl flex items-center justify-center text-white shadow-green-500/20 shadow-lg">
+              <Ticket className="h-6 w-6" />
+            </div>
           </div>
-          <div className="h-12 w-12 bg-green-500 rounded-xl flex items-center justify-center text-white shadow-green-500/20 shadow-lg">
-            <Ticket className="h-6 w-6" />
-          </div>
-        </div>
+        )}
 
         {/* Customers Card */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">

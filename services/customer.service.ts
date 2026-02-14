@@ -12,8 +12,9 @@ interface CustomerData {
 }
 
 export const customerService = {
-  async getAll(): Promise<Customer[]> {
+  async getAll(where: any = {}): Promise<Customer[]> {
     return await prisma.customer.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
     })
   },
