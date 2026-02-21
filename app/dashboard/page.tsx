@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { 
   FileText, 
   Calendar, 
@@ -22,10 +23,12 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50/50 p-8 space-y-8">
       {/* Action Button */}
       <div className="flex justify-end">
-        <Button className="gap-2 bg-blue-900 hover:bg-blue-800 text-white px-6">
-          <Plus className="h-4 w-4" />
-          عرض سعر جديد
-        </Button>
+        <Link href="/dashboard/quotations/create">
+          <Button className="gap-2 bg-blue-900 hover:bg-blue-800 text-white px-6">
+            <Plus className="h-4 w-4" />
+            عرض سعر جديد
+          </Button>
+        </Link>
       </div>
 
       {/* Stats Cards */}
@@ -81,10 +84,12 @@ export default function Dashboard() {
       <div className="bg-card rounded-xl border shadow-sm flex flex-col min-h-[400px]">
         <div className="p-6 border-b flex justify-between items-center">
           <h2 className="font-semibold text-lg">آخر عروض الأسعار</h2>
-          <Button variant="ghost" size="sm" className="gap-2">
-            عرض الكل
-            <span className="text-xs">←</span>
-          </Button>
+          <Link href="/dashboard/quotations">
+            <Button variant="ghost" size="sm" className="gap-2">
+              عرض الكل
+              <span className="text-xs">←</span>
+            </Button>
+          </Link>
         </div>
         
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
@@ -92,9 +97,11 @@ export default function Dashboard() {
             <FileText className="h-8 w-8 opacity-50" />
           </div>
           <p>لا توجد عروض أسعار حتى الآن</p>
-          <Button variant="link" className="text-blue-900">
-            إنشاء عرض سعر جديد
-          </Button>
+          <Link href="/dashboard/quotations/create">
+            <Button variant="link" className="text-blue-900">
+              إنشاء عرض سعر جديد
+            </Button>
+          </Link>
         </div>
       </div>
     </div>

@@ -64,7 +64,7 @@ export const ROLE_NAMES = {
 export const NAV_ITEMS = {
   admin: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
-    { type: 'link', path: '/quotations', label: 'عروض الأسعار', icon: 'FileText' },
+    { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار', icon: 'FileText' },
     { type: 'link', path: '/reports', label: 'التقارير', icon: 'BarChart3' },
     { type: 'link', path: '/settings', label: 'الإعدادات', icon: 'Settings' },
     { type: 'divider', label: 'الإدارة' },
@@ -79,13 +79,13 @@ export const NAV_ITEMS = {
   ],
   sales: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
-    { type: 'link', path: '/quotations', label: 'عروض الأسعار', icon: 'FileText' },
+    { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار', icon: 'FileText' },
     { type: 'link', path: '/customers', label: 'العملاء', icon: 'Users' },
     { type: 'link', path: '/payments', label: 'المدفوعات', icon: 'CreditCard' },
   ],
   booking: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
-    { type: 'link', path: '/quotations', label: 'عروض الأسعار المؤكدة', icon: 'FileText' },
+    { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار المؤكدة', icon: 'FileText' },
     { type: 'link', path: '/bookings', label: 'الحجوزات', icon: 'Calendar' },
     { type: 'link', path: '/vouchers', label: 'القسائم', icon: 'Ticket' },
   ],

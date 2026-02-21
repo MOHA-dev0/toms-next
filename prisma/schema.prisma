@@ -225,7 +225,6 @@ model Service {
   nameEn        String?  @map("name_en")
   descriptionAr String?  @map("description_ar")
   purchasePrice Decimal  @default(0) @map("purchase_price") @db.Decimal(10, 2)
-  sellingPrice  Decimal  @default(0) @map("selling_price") @db.Decimal(10, 2)
   currency      Currency @default(USD)
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at")
@@ -315,6 +314,7 @@ model Quotation {
   quotationItineraries QuotationItinerary[]
   bookings            Booking[]
   payments            Payment[]
+  passengers          QuotationPassenger[]
 
   @@map("quotations")
 }
@@ -514,5 +514,30 @@ model Company {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
+
   @@map("companies")
 }
+
+model QuotationPassenger {
+  id          String   @id @default(uuid())
+  quotationId String   @map("quotation_id")
+  name        String
+  type        String   @default("adult") // adult, child, infant
+  passport    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("quotation_passengers")
+}
+
+model SystemSequence {
+  key       String   @id // 'booking', 'quotation'
+  lastSeq   Int      @default(0) @map("last_seq")
+  prefix    String   // 'BK', 'QT'
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_sequences")
+}
+

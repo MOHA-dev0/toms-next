@@ -129,32 +129,49 @@ export default function HotelsPage() {
   return (
     <div className="p-8 space-y-6">
       {/* Tab Switcher - Top Right */}
-      <div className="flex justify-start mb-4">
-        <div className="bg-gray-100 p-1 rounded-lg inline-flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveTab('hotels')}
-            className={`rounded-md text-sm font-medium gap-2 px-3 transition-all ${
-              activeTab === 'hotels' ? 'bg-white shadow-sm text-blue-900' : 'text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <Building className="w-4 h-4" />
-            الفنادق
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveTab('room-types')}
-            className={`rounded-md text-sm font-medium gap-2 px-3 transition-all ${
-              activeTab === 'room-types' ? 'bg-white shadow-sm text-blue-900' : 'text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <BedDouble className="w-4 h-4" />
-            أنواع الغرف
-          </Button>
-        </div>
-      </div>
+   <div className="flex justify-between items-center mb-4">
+
+    <div className="bg-gray-100 p-1 rounded-lg inline-flex items-center gap-1">
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => setActiveTab('hotels')}
+      className={`rounded-md text-sm font-medium gap-2 px-3 transition-all ${
+        activeTab === 'hotels'
+          ? 'bg-white shadow-sm text-blue-900'
+          : 'text-gray-500 hover:text-gray-900'
+      }`}
+    >
+      <Building className="w-4 h-4" />
+      الفنادق
+    </Button>
+
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => setActiveTab('room-types')}
+      className={`rounded-md text-sm font-medium gap-2 px-3 transition-all ${
+        activeTab === 'room-types'
+          ? 'bg-white shadow-sm text-blue-900'
+          : 'text-gray-500 hover:text-gray-900'
+      }`}
+    >
+      <BedDouble className="w-4 h-4" />
+      أنواع الغرف
+    </Button>
+  </div>
+
+  {/* Add Button - أقصى اليسار */}
+  <Button
+    onClick={() => handleOpenForm()}
+    className="bg-blue-900 hover:bg-blue-800 text-white gap-2 ml-4 shadow-md hover:shadow-lg transition-all"
+  >
+    <Plus className="w-4 h-4" />
+    إضافة فندق
+  </Button>
+
+</div>
+
 
       {activeTab === 'hotels' ? (
         <>
@@ -173,7 +190,7 @@ export default function HotelsPage() {
 
             {/* Left Actions */}
             <div className="flex items-center gap-2 w-full md:w-auto">
-               <HotelExcelImport cities={cities} />
+              <HotelExcelImport cities={cities} />
             
             </div>
           </div>

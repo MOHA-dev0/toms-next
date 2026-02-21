@@ -130,17 +130,11 @@ export default function EmployeesPage() {
   const pendingInvitations = invitations.filter(inv => inv.status === 'pending')
 
   return (
-    <div className="p-8 space-y-8 animate-in fade-in-50 duration-500">
+    <div className="p-8 space-y-8 animate-in fade-in-50 duration-500 ">
       {/* Header section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-100 rounded-2xl text-blue-700">
-            <UserPlus className="w-8 h-8" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">إدارة الموظفين</h1>
-            <p className="text-gray-500">إدارة حسابات الفريق وصلاحيات الوصول</p>
-          </div>
+     
         </div>
         
         <Button 
@@ -256,7 +250,7 @@ export default function EmployeesPage() {
                       </div>
                       <div className="flex items-center gap-2 text-gray-600">
                         <Shield className="w-4 h-4 text-blue-500" />
-                        <span>Role: {ROLE_NAMES[inv.role as keyof typeof ROLE_NAMES] || inv.role}</span>
+                        <span>بدور: {ROLE_NAMES[inv.role as keyof typeof ROLE_NAMES] || inv.role}</span>
                       </div>
                     </div>
                   }

@@ -1,0 +1,13 @@
+
+model QuotationPassenger {
+  id          String   @id @default(uuid())
+  quotationId String   @map("quotation_id")
+  name        String
+  type        String   @default("adult") // adult, child, infant
+  passport    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@map("quotation_passengers")
+}

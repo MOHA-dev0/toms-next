@@ -1,0 +1,9 @@
+
+model SystemSequence {
+  key       String   @id // 'booking', 'quotation'
+  lastSeq   Int      @default(0) @map("last_seq")
+  prefix    String   // 'BK', 'QT'
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_sequences")
+}

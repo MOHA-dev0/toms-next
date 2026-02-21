@@ -10,21 +10,85 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const filters = getAccessFilters(userContext, 'quotation');
-    if (filters.id === 'impossible-id') {
-       return NextResponse.json([]); 
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || 'all';
+
+    const accessFilters = getAccessFilters(userContext, 'quotation');
+    if (accessFilters.id === 'impossible-id') {
+       return NextResponse.json({ meta: { totalCount: 0, draftCount: 0, unconfirmedCount: 0, confirmedCount: 0, filteredCount: 0, page: 1, pageCount: 0 }, data: [] }); 
     }
 
-    const quotations = await prisma.quotation.findMany({
-      where: filters,
-      include: {
-        customer: true,
-        salesEmployee: true,
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    const where: any = { ...accessFilters };
 
-    return NextResponse.json(quotations);
+    if (search) {
+      where.OR = [
+        { referenceNumber: { contains: search } },
+        { customer: { nameAr: { contains: search } } },
+        { destinationCity: { nameAr: { contains: search } } },
+      ];
+    }
+
+    if (status !== 'all') {
+      if (status === 'unconfirmed') {
+        where.status = 'sent';
+      } else {
+        where.status = status;
+      }
+    }
+
+    const [
+      totalCount,
+      draftCount,
+      unconfirmedCount,
+      confirmedCount,
+      filteredCount,
+      quotations
+    ] = await Promise.all([
+      prisma.quotation.count({ where: accessFilters }),
+      prisma.quotation.count({ where: { ...accessFilters, status: 'draft' } }),
+      prisma.quotation.count({ where: { ...accessFilters, status: 'sent' } }),
+      prisma.quotation.count({ where: { ...accessFilters, status: 'confirmed' } }),
+      prisma.quotation.count({ where }),
+      prisma.quotation.findMany({
+        where,
+        include: {
+          customer: true,
+          destinationCity: true,
+          agent: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      })
+    ]);
+
+    const formattedData = quotations.map(q => ({
+      id: q.id,
+      referenceNumber: q.referenceNumber,
+      customerName: q.customer?.nameAr || 'غير محدد',
+      agentName: q.agent?.nameEn || '',
+      destination: q.destinationCity?.nameAr || 'غير محدد',
+      paxCount: (q.adults || 0) + (q.children || 0) + (q.infants || 0),
+      totalPrice: q.totalPrice ? Number(q.totalPrice.toString()) : 0,
+      createdAt: q.createdAt,
+      status: q.status
+    }));
+
+    return NextResponse.json({
+      meta: {
+        totalCount,
+        draftCount,
+        unconfirmedCount,
+        confirmedCount,
+        filteredCount,
+        page,
+        pageCount: Math.ceil(filteredCount / limit)
+      },
+      data: formattedData
+    });
   } catch (error) {
     console.error('Error fetching quotations:', error);
     return NextResponse.json({ error: 'Failed to fetch quotations' }, { status: 500 });
