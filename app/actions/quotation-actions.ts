@@ -3,6 +3,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/auth";
+import { getUserContext } from "@/lib/permissions";
 
 export async function getQuotationReferenceData() {
   const [agents, companies, cities, employees, currentUserId] = await Promise.all([
@@ -205,17 +206,172 @@ export async function finalizeQuotation(quotationId: string, data: {
   profit: number;
   commissionAmount: number;
   status: string;
-}) {
+}, state?: any) {
   if (!quotationId) throw new Error("Quotation ID is required");
-  return await prisma.quotation.update({
+
+  const existingQuotation = await prisma.quotation.findUnique({
+    where: { id: quotationId },
+    include: { salesEmployee: true }
+  });
+
+  if (!existingQuotation) throw new Error("Quotation not found");
+
+  const context = await getUserContext();
+  if (!context) throw new Error("Unauthorized");
+
+  if (existingQuotation.status === 'confirmed' && !context.isAdmin) {
+    throw new Error("You don't have permission to edit a confirmed quotation.");
+  }
+
+
+
+  let finalReferenceNumber = existingQuotation.referenceNumber;
+  
+  if (existingQuotation.status === 'draft') {
+    const empInitial = (existingQuotation.salesEmployee?.initial)
+      ? existingQuotation.salesEmployee.initial.toUpperCase()
+      : (existingQuotation.salesEmployee?.nameAr)
+        ? existingQuotation.salesEmployee.nameAr.charAt(0).toUpperCase()
+        : 'M';
+    const currentYear = new Date().getFullYear().toString().slice(-2);
+    let randomNum = '';
+    let isUnique = false;
+
+    while (!isUnique) {
+      randomNum = Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
+      finalReferenceNumber = `${empInitial}-${currentYear}-${randomNum}`;
+      const exists = await prisma.quotation.findUnique({ where: { referenceNumber: finalReferenceNumber } });
+      if (!exists) isUnique = true;
+    }
+    
+    const booking = await prisma.booking.findFirst({ where: { quotationId } });
+    if (booking) {
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { referenceNumber: finalReferenceNumber }
+      });
+    }
+  }
+
+  // Clean existing relations first just in case to avoid duplicates if re-submitted later
+  // Ideally this would be a transaction but Prisma `update` doesn't support nested deleteMany for all without specific queries
+  await prisma.$transaction([
+    prisma.quotationHotel.deleteMany({ where: { quotationId } }),
+    prisma.quotationFlight.deleteMany({ where: { quotationId } }),
+    prisma.quotationCar.deleteMany({ where: { quotationId } }),
+    prisma.quotationService.deleteMany({ where: { quotationId } }),
+    prisma.quotationPassenger.deleteMany({ where: { quotationId } }),
+  ]);
+
+  if (state?.basicInfo?.passengers && state.basicInfo.passengers.length > 0) {
+    const mainPassengerName = state.basicInfo.passengers[0].name;
+    if (existingQuotation.customerId && mainPassengerName) {
+      await prisma.customer.update({
+        where: { id: existingQuotation.customerId },
+        data: { nameAr: mainPassengerName }
+      });
+    }
+  }
+
+  // Fetch valid services to ensure we don't send invalid foreign keys for `serviceId`
+  const validServices = await prisma.service.findMany({ select: { id: true } });
+  const validServiceIds = new Set(validServices.map(s => s.id));
+
+  await prisma.quotation.update({
+    
     where: { id: quotationId },
     data: { 
+      referenceNumber: finalReferenceNumber,
       subtotal: data.subtotal,
       totalPrice: data.totalPrice,
       profit: data.profit,
       commissionAmount: data.commissionAmount,
-      status: data.status as any 
+      status: data.status as any,
+      
+      ...(state?.basicInfo && {
+        adults: state.basicInfo.adults,
+        children: state.basicInfo.children,
+        infants: state.basicInfo.infants,
+        destinationCityId: state.basicInfo.destinationCityIds?.[0] || null,
+        source: state.basicInfo.channel || 'b2c',
+        agentId: state.basicInfo.agencyId || null,
+        notes: state.basicInfo.notes || null,
+        ...(state.basicInfo.startDate && { startDate: new Date(state.basicInfo.startDate) }),
+        ...(state.basicInfo.endDate && { endDate: new Date(state.basicInfo.endDate) }),
+        passengers: {
+          create: state.basicInfo.passengers.map((p: any) => ({
+            name: p.name || 'Unknown',
+            type: p.type || 'adult',
+            passport: p.passport || null
+          }))
+        }
+      }),
+
+      ...(state && {
+        quotationHotels: {
+          create: state.hotelSegments?.map((h: any) => ({
+            hotelId: h.hotelId,
+            roomTypeId: h.roomTypeId,
+            checkIn: new Date(h.checkIn),
+            checkOut: new Date(h.checkOut),
+            nights: Math.max(1, Math.ceil((new Date(h.checkOut).getTime() - new Date(h.checkIn).getTime()) / (1000 * 60 * 60 * 24))),
+            roomsCount: h.roomsCount || 1,
+            usage: h.usage || 'dbl',
+            board: h.boardType || 'bb',
+            purchasePrice: h.purchasePrice || 0,
+            sellingPrice: h.sellingPrice || 0,
+            notes: h.notes || null,
+          })) || []
+        },
+        quotationFlights: {
+          create: state.isFlightsEnabled ? (state.flights?.map((f: any) => ({
+            airlineAr: 'غير محدد',
+            flightNumber: f.description, // using description as flight info
+            departureCity: 'غير محدد',
+            arrivalCity: 'غير محدد',
+            departureDate: new Date(f.date),
+            passengers: f.paxCount || 1,
+            purchasePrice: 0,
+            sellingPrice: f.price || 0,
+          })) || []) : []
+        },
+        quotationCars: {
+          create: state.isCarsEnabled ? (state.carRentals?.map((c: any) => ({
+            carTypeAr: c.description,
+            pickupLocation: 'غير محدد',
+            pickupDate: new Date(c.pickupDate),
+            dropoffDate: new Date(c.dropoffDate),
+            days: c.days || 1,
+            purchasePrice: 0,
+            sellingPrice: c.price || 0,
+          })) || []) : []
+        },
+        quotationServices: {
+          create: [
+            ...(state.itineraryServices?.map((s: any) => ({
+              ...(s.serviceId && validServiceIds.has(s.serviceId) ? { serviceId: s.serviceId } : {}),
+              nameAr: s.name || 'بدون اسم',
+              quantity: s.quantity || 1,
+              serviceDate: s.date ? new Date(s.date) : new Date(),
+              purchasePrice: s.purchasePrice || 0,
+              sellingPrice: s.sellingPrice || 0,
+              descriptionAr: s.notes || null,
+            })) || []),
+            ...(state.otherServices?.map((s: any) => ({
+              ...(s.serviceId && validServiceIds.has(s.serviceId) ? { serviceId: s.serviceId } : {}),
+              nameAr: s.name || 'بدون اسم',
+              quantity: s.quantity || 1,
+              serviceDate: s.date ? new Date(s.date) : new Date(),
+              purchasePrice: s.purchasePrice || 0,
+              sellingPrice: s.sellingPrice || 0,
+              descriptionAr: s.notes || null,
+            })) || [])
+          ]
+        }
+      })
     }
   });
+
+  return { success: true, referenceNumber: finalReferenceNumber };
 }
 

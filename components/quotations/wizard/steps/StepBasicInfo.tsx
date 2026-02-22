@@ -266,6 +266,17 @@ export default function StepBasicInfo() {
         </div>
       </div>
 
+      {/* Notes / Special Requests */}
+      <div className="space-y-2 mt-6">
+        <label className="block text-sm font-medium text-gray-700">ملاحظات إضافية (Additional Notes/Requests)</label>
+        <textarea
+          className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-right min-h-[100px]"
+          value={basicInfo.notes || ""}
+          onChange={(e) => setBasicInfo({ notes: e.target.value })}
+          placeholder="أدخل أي ملاحظات إضافية أو طلبات خاصة هنا..."
+        />
+      </div>
+
       {/* Passenger Names (Dynamic List) */}
       <div className="space-y-4 border-t pt-4">
         <h3 className="text-lg font-semibold text-gray-800">أسماء المسافرين (Passenger Names)</h3>

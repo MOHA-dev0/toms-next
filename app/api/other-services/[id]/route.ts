@@ -14,14 +14,15 @@ const otherServiceSchema = z.object({
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validatedData = otherServiceSchema.parse(body);
 
     const service = await prisma.otherService.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         nameAr: validatedData.nameAr,
         nameEn: validatedData.nameEn,
@@ -43,11 +44,12 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await prisma.otherService.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ message: 'Service deleted successfully' });

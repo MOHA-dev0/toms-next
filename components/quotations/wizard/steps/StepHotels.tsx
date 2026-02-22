@@ -24,12 +24,11 @@ export default function StepHotels() {
   useEffect(() => {
     // Check LIVE state to avoid strict mode double-mount issues
     if (useQuotationStore.getState().hotelSegments.length === 0) {
-      const destCity = basicInfo.destinationCityIds?.[0] || "";
       addHotelSegment({
         id: crypto.randomUUID(),
         checkIn: new Date(),
         checkOut: new Date(new Date().setDate(new Date().getDate() + 1)),
-        cityId: destCity,
+        cityId: "",
         hotelId: "",
         roomTypeId: "",
         boardType: "bb",
@@ -40,11 +39,6 @@ export default function StepHotels() {
         currency: "USD",
         isVoucherVisible: true,
       });
-      
-      // If destination city is set, auto-load its hotels
-      if (destCity) {
-        handleCityChange(hotelSegments[0]?.id || "", destCity);
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
       destination: q.destinationCity?.nameAr || 'غير محدد',
       paxCount: (q.adults || 0) + (q.children || 0) + (q.infants || 0),
       totalPrice: q.totalPrice ? Number(q.totalPrice.toString()) : 0,
+      paidAmount: q.paidAmount ? Number(q.paidAmount.toString()) : 0,
       createdAt: q.createdAt,
       status: q.status
     }));

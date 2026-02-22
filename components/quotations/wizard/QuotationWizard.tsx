@@ -12,18 +12,30 @@ import StepFinancials from "./steps/StepFinancials"; // Imported Step 6
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { finalizeQuotation } from "@/app/actions/quotation-actions";
 import { calculateQuotationTotals } from "@/lib/pricing-engine";
 
-export default function QuotationWizard() {
+interface QuotationWizardProps {
+  isEditMode?: boolean;
+  existingStatus?: string;
+}
+
+export default function QuotationWizard({ isEditMode, existingStatus }: QuotationWizardProps = {}) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const state = useQuotationStore();
   const { basicInfo, setBasicInfo, reset } = state;
 
   const handleNext = async () => {
     if (currentStep === 1) {
+      if (basicInfo.quotationId) {
+        setCurrentStep(2);
+        return;
+      }
+
       // Validate Step 1
       setIsSubmitting(true);
       try {
@@ -71,6 +83,11 @@ export default function QuotationWizard() {
         setIsSubmitting(false);
       }
     } else if (currentStep === 6) {
+        if (existingStatus === 'confirmed') {
+          const confirmUpdate = window.confirm("هذا العرض مؤكد بالفعل. هل أنت متأكد من رغبتك في تحديثه؟ (This quotation is already confirmed. Are you sure you want to update it?)");
+          if (!confirmUpdate) return;
+        }
+
         setIsSubmitting(true);
         try {
           if (basicInfo.quotationId) {
@@ -81,14 +98,25 @@ export default function QuotationWizard() {
             // - commissionAmount
             // - totalSales (Sales Price) -> mapped to 'totalPrice' in DB
             await finalizeQuotation(basicInfo.quotationId, {
-              status: 'sent',
+              status: existingStatus === 'confirmed' ? 'confirmed' : 'sent',
               subtotal: totals.totalCost,
               totalPrice: totals.totalSales,
               profit: totals.profit,
               commissionAmount: totals.commissionAmount
+            }, {
+              basicInfo: state.basicInfo,
+              hotelSegments: state.hotelSegments,
+              flights: state.flights,
+              isFlightsEnabled: state.isFlightsEnabled,
+              carRentals: state.carRentals,
+              isCarsEnabled: state.isCarsEnabled,
+              itineraryServices: state.itineraryServices,
+              otherServices: state.otherServices,
             });
           }
           toast.success("تم تحديث الفاتورة والتسعير النهائي بنجاح!");
+          
+          queryClient.invalidateQueries({ queryKey: ['quotations'] });
           reset(); // Reset wizard store for the next time
           router.push("/dashboard/quotations");
         } catch (error: any) {
@@ -98,6 +126,13 @@ export default function QuotationWizard() {
           setIsSubmitting(false);
         }
     } else {
+        if (currentStep === 2) {
+            const hasValidHotel = state.hotelSegments.some(h => h.hotelId && h.cityId);
+            if (!hasValidHotel) {
+                toast.error("At least one hotel must be added before continuing.");
+                return;
+            }
+        }
         // Simple navigation for subsequent steps
         setCurrentStep(prev => prev + 1);
     }
@@ -107,7 +142,9 @@ export default function QuotationWizard() {
     <div className="max-w-7xl mx-auto p-6 bg-white shadow-lg rounded-xl my-8 text-right" dir="rtl">
       {/* Header / Stepper */}
       <div className="mb-8 border-b pb-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">إنشاء عرض سعر جديد (New Quotation)</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          {isEditMode ? "تعديل عرض سعر (Edit Quotation)" : "إنشاء عرض سعر جديد (New Quotation)"}
+        </h1>
         <div className="flex gap-2 text-sm text-gray-500 items-center overflow-x-auto">
            <span className={currentStep >= 1 ? "text-blue-600 font-bold whitespace-nowrap" : "whitespace-nowrap"}>1. المعلومات الأساسية</span>
            <span>&gt;</span>

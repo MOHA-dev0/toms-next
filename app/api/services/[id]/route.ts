@@ -8,27 +8,26 @@ const serviceSchema = z.object({
   nameEn: z.string().optional(),
   cityId: z.string().min(1, 'City is required'),
   purchasePrice: z.number().min(0).default(0),
-  sellingPrice: z.number().min(0).default(0),
   currency: z.enum(['USD', 'EUR', 'TRY', 'SAR', 'AED', 'GBP']).default('USD'),
   descriptionAr: z.string().optional(),
 });
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validatedData = serviceSchema.parse(body);
 
     const service = await prisma.service.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         nameAr: validatedData.nameAr,
         nameEn: validatedData.nameEn,
         cityId: validatedData.cityId,
         purchasePrice: validatedData.purchasePrice,
-        sellingPrice: validatedData.sellingPrice,
         currency: validatedData.currency,
         descriptionAr: validatedData.descriptionAr,
       },
@@ -42,11 +41,12 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await prisma.service.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ message: 'Service deleted successfully' });

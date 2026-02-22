@@ -8,6 +8,7 @@ export interface Quotation {
   destination: string;
   paxCount: number;
   totalPrice: number;
+  paidAmount: number;
   createdAt: Date;
   status: string;
 }

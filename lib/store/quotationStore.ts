@@ -76,6 +76,7 @@ export interface QuotationState {
     nights?: number;
     startDate?: Date;
     endDate?: Date;
+    notes?: string;
   };
 
   // Steps 2-6 Data
@@ -124,6 +125,8 @@ export interface QuotationState {
   removeCarRental: (id: string) => void;
 
   setFinancials: (financials: Partial<QuotationState['financials']>) => void;
+  
+  setFullState: (state: Partial<QuotationState>) => void;
   
   reset: () => void;
 }
@@ -273,6 +276,8 @@ export const useQuotationStore = create<QuotationState>()(
       removeCarRental: (id) => set((state) => ({ carRentals: state.carRentals.filter((r) => r.id !== id) })),
 
       setFinancials: (financials) => set((state) => ({ financials: { ...state.financials, ...financials } })),
+
+      setFullState: (newState) => set((state) => ({ ...state, ...newState })),
 
       reset: () => set({
         basicInfo: { channel: 'b2c', adults: 1, children: 0, infants: 0, passengers: [{ id: '1', name: '', type: 'adult' }], destinationCityIds: [] },

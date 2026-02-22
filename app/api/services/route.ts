@@ -9,7 +9,6 @@ const serviceSchema = z.object({
   nameEn: z.string().optional(),
   cityId: z.string().min(1, 'City is required'),
   purchasePrice: z.number().min(0).default(0),
-  sellingPrice: z.number().min(0).default(0), // Optional or default
   currency: z.enum(['USD', 'EUR', 'TRY', 'SAR', 'AED', 'GBP']).default('USD'),
   descriptionAr: z.string().optional(),
 });
@@ -41,7 +40,6 @@ export async function POST(request: Request) {
         nameEn: validatedData.nameEn,
         cityId: validatedData.cityId,
         purchasePrice: validatedData.purchasePrice,
-        sellingPrice: validatedData.sellingPrice,
         currency: validatedData.currency,
         descriptionAr: validatedData.descriptionAr,
       },
