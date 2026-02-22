@@ -10,29 +10,62 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const filters = getAccessFilters(userContext, 'booking');
-    if (filters.id === 'impossible-id') {
-       return NextResponse.json([]); 
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search') || '';
+    const tab = searchParams.get('tab') || 'confirmed';
+
+    if (tab === 'bookings') {
+      const bookings = await prisma.booking.findMany({
+        where: search
+          ? {
+              OR: [
+                { referenceNumber: { contains: search } },
+                { quotation: { referenceNumber: { contains: search } } },
+                { vouchers: { some: { voucherCode: { contains: search } } } },
+              ],
+            }
+          : undefined,
+        include: {
+          quotation: { include: { customer: true, destinationCity: true } },
+          bookingEmployee: true,
+          vouchers: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return NextResponse.json(bookings);
     }
 
-    const bookings = await prisma.booking.findMany({
-      where: filters,
-      include: {
-        quotation: {
-          include: {
-            customer: true,
-            salesEmployee: true
-          }
-        },
-        bookingEmployee: true,
+    // All confirmed quotations (from all employees) — include bookings to show status
+    const confirmed = await prisma.quotation.findMany({
+      where: {
+        status: 'confirmed',
+        ...(search
+          ? {
+              OR: [
+                { referenceNumber: { contains: search } },
+                { customer: { nameAr: { contains: search } } },
+              ],
+            }
+          : {}),
       },
-      orderBy: { createdAt: 'desc' }
+      include: {
+        customer: true,
+        destinationCity: true,
+        agent: true,
+        salesEmployee: true,
+        quotationHotels: { include: { hotel: true, roomType: true } },
+        quotationCars: true,
+        quotationFlights: true,
+        passengers: true,
+        bookings: { include: { vouchers: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
     });
 
-    return NextResponse.json(bookings);
+    return NextResponse.json(confirmed);
   } catch (error) {
     console.error('Error fetching bookings:', error);
-    return NextResponse.json({ error: 'Failed to fetch bookings' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
   }
 }
 
@@ -45,9 +78,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Logic: Creating a booking usually comes from confirming a quotation.
-    // Ensure the quotation belongs to the sales user if they are sales.
-    
     if (userContext.isSales) {
         const quotation = await prisma.quotation.findUnique({
             where: { id: body.quotationId }
@@ -58,15 +88,11 @@ export async function POST(request: NextRequest) {
         }
     }
 
-    // Default booking employee assignment logic could go here
-    // For now, we assume body contains necessary fields or we validate them.
-    
-    // Simplistic Create for demonstration
     const booking = await prisma.booking.create({
       data: {
-        referenceNumber: body.referenceNumber, // Should probably be generated
+        referenceNumber: body.referenceNumber,
         quotationId: body.quotationId,
-        bookingEmployeeId: body.bookingEmployeeId || userContext.employeeId || 'assign-admin', // Fallback needed
+        bookingEmployeeId: body.bookingEmployeeId || userContext.employeeId || '',
         status: 'pending',
         notes: body.notes
       }

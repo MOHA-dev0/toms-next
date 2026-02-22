@@ -56,9 +56,9 @@ export async function POST(request: Request) {
 
     return response;
 
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-        return NextResponse.json({ error: error.errors }, { status: 400 });
+  } catch (error: any) {
+    if (error && typeof error === 'object' && 'errors' in error) {
+        return NextResponse.json({ error: (error as any).errors }, { status: 400 });
     }
     console.error('Accept invite error:', error);
     return NextResponse.json({ error: 'Failed to accept invitation' }, { status: 500 });

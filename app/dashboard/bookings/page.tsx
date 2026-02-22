@@ -1,0 +1,272 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Search, Ticket, CheckCircle, Package, Eye, MoreVertical, FileText, Printer } from 'lucide-react';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
+
+type Tab = 'confirmed' | 'bookings';
+
+export default function BookingsPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>('confirmed');
+  const [search, setSearch] = useState('');
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = new URLSearchParams({ tab });
+      if (search.trim()) p.set('search', search.trim());
+      const res = await fetch(`/api/bookings?${p}`);
+      if (!res.ok) throw new Error();
+      setData(await res.json());
+    } catch {
+      toast.error('خطأ في جلب البيانات');
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, search]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Close menu on click outside
+  useEffect(() => {
+    const handler = () => setOpenMenuId(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
+  const handleConfirmBooking = async (quotationId: string) => {
+    setOpenMenuId(null);
+    if (!confirm('هل تريد إنشاء الفواتشرات لهذا العرض؟')) return;
+    setConfirmingId(quotationId);
+    try {
+      const res = await fetch(`/api/bookings/${quotationId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        if (err.bookingId) {
+          toast.info('يوجد حجز بالفعل، سيتم التوجيه...');
+          router.push(`/dashboard/bookings/${err.bookingId}`);
+          return;
+        }
+        throw new Error(err.error || 'فشل');
+      }
+      const booking = await res.json();
+      toast.success(`تم إنشاء الفواتشرات بنجاح! (${booking.vouchers?.length || 0} فاوتشر)`);
+      fetchData(); // refresh the list
+    } catch (e: any) {
+      toast.error(e.message || 'فشل في إنشاء الفواتشرات');
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
+  const goToBooking = (q: any) => {
+    setOpenMenuId(null);
+    const bk = q.bookings?.[0];
+    if (bk) router.push(`/dashboard/bookings/${bk.id}`);
+  };
+
+  const fmt = (d?: string | null) => d ? format(new Date(d), 'dd/MM/yyyy') : '—';
+
+  return (
+    <div className="flex-1 p-6 space-y-6" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-foreground">الحجوزات والعمليات</h1>
+          <p className="text-sm text-muted-foreground mt-1">إدارة الحجوزات وتوليد الفاوتشرات</p>
+        </div>
+      </div>
+
+      {/* Tabs + Search */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex bg-muted rounded-xl p-1">
+          <button
+            onClick={() => setTab('confirmed')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'confirmed' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <CheckCircle className="w-4 h-4 inline ml-1.5" />
+            عروض مؤكدة
+          </button>
+          <button
+            onClick={() => setTab('bookings')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'bookings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Ticket className="w-4 h-4 inline ml-1.5" />
+            الحجوزات
+          </button>
+        </div>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="بحث برقم العرض أو اسم العميل أو رقم الفاوتشر..."
+            className="w-full pr-10 pl-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+      ) : data.length === 0 ? (
+        <div className="text-center py-20 text-muted-foreground">
+          <Package className="w-12 h-12 mx-auto mb-3 opacity-40" />
+          <p className="text-lg font-bold">{tab === 'confirmed' ? 'لا توجد عروض مؤكدة' : 'لا توجد حجوزات'}</p>
+        </div>
+      ) : tab === 'confirmed' ? (
+        /* ── Confirmed Quotations Table ── */
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-muted/50 text-xs text-muted-foreground font-bold border-b border-border">
+                <th className="py-3 px-4 text-right">رقم العرض</th>
+                <th className="py-3 px-4 text-right">العميل</th>
+                <th className="py-3 px-4 text-right">موظف المبيعات</th>
+                <th className="py-3 px-4 text-center">الفنادق</th>
+                <th className="py-3 px-4 text-center">السيارات</th>
+                <th className="py-3 px-4 text-right">التاريخ</th>
+                <th className="py-3 px-4 text-center">الحالة</th>
+                <th className="py-3 px-4 text-center w-14"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((q: any) => {
+                const hasBooking = q.bookings && q.bookings.length > 0;
+                const voucherCount = hasBooking ? q.bookings[0]?.vouchers?.length || 0 : 0;
+                return (
+                  <tr key={q.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="py-3 px-4 font-mono text-primary font-bold text-sm">{q.referenceNumber}</td>
+                    <td className="py-3 px-4 text-sm font-medium">{q.customer?.nameAr || '—'}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{q.salesEmployee?.nameAr || '—'}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">{q.quotationHotels?.length || 0}</span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full text-xs font-bold">{q.quotationCars?.length || 0}</span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{fmt(q.startDate)}</td>
+                    <td className="py-3 px-4 text-center">
+                      {hasBooking ? (
+                        <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                          ✅ {voucherCount} فاوتشر
+                        </span>
+                      ) : confirmingId === q.id ? (
+                        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full mx-auto" />
+                      ) : (
+                        <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-xs font-bold">بانتظار</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-center relative">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === q.id ? null : q.id); }}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                      {openMenuId === q.id && (
+                        <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 min-w-[180px] py-1" onClick={(e) => e.stopPropagation()}>
+                          {!hasBooking ? (
+                            <button
+                              onClick={() => handleConfirmBooking(q.id)}
+                              className="w-full text-right px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
+                            >
+                              <FileText className="w-4 h-4 text-emerald-600" />
+                              إنشاء الفواتشرات
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => goToBooking(q)}
+                              className="w-full text-right px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
+                            >
+                              <Eye className="w-4 h-4 text-primary" />
+                              عرض الفاوتشرات
+                            </button>
+                          )}
+                          <button
+                            onClick={() => { setOpenMenuId(null); router.push(`/dashboard/quotations/${q.id}`); }}
+                            className="w-full text-right px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
+                          >
+                            <Printer className="w-4 h-4 text-muted-foreground" />
+                            عرض المسار
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* ── Bookings Table ── */
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-muted/50 text-xs text-muted-foreground font-bold border-b border-border">
+                <th className="py-3 px-4 text-right">رقم الحجز</th>
+                <th className="py-3 px-4 text-right">رقم العرض</th>
+                <th className="py-3 px-4 text-right">العميل</th>
+                <th className="py-3 px-4 text-center">الفاوتشرات</th>
+                <th className="py-3 px-4 text-center">الحالة</th>
+                <th className="py-3 px-4 text-right">التاريخ</th>
+                <th className="py-3 px-4 text-center">عرض</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((b: any) => (
+                <tr key={b.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-4 font-mono text-primary font-bold text-sm">{b.referenceNumber}</td>
+                  <td className="py-3 px-4 font-mono text-xs text-muted-foreground">{b.quotation?.referenceNumber || '—'}</td>
+                  <td className="py-3 px-4 text-sm font-medium">{b.quotation?.customer?.nameAr || '—'}</td>
+                  <td className="py-3 px-4 text-center">
+                    <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold">{b.vouchers?.length || 0}</span>
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <StatusBadge status={b.status} />
+                  </td>
+                  <td className="py-3 px-4 text-sm text-muted-foreground">{fmt(b.createdAt)}</td>
+                  <td className="py-3 px-4 text-center">
+                    <button
+                      onClick={() => router.push(`/dashboard/bookings/${b.id}`)}
+                      className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      التفاصيل
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    pending: { label: 'قيد الانتظار', cls: 'bg-yellow-100 text-yellow-700' },
+    confirmed: { label: 'مؤكد', cls: 'bg-emerald-100 text-emerald-700' },
+    cancelled: { label: 'ملغي', cls: 'bg-red-100 text-red-700' },
+    completed: { label: 'مكتمل', cls: 'bg-blue-100 text-blue-700' },
+  };
+  const s = map[status] || { label: status, cls: 'bg-gray-100 text-gray-700' };
+  return <span className={`${s.cls} px-2.5 py-0.5 rounded-full text-xs font-bold`}>{s.label}</span>;
+}
+

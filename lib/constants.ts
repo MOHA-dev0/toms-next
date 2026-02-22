@@ -65,6 +65,7 @@ export const NAV_ITEMS = {
   admin: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
     { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار', icon: 'FileText' },
+    { type: 'link', path: '/dashboard/bookings', label: 'الحجوزات والعمليات', icon: 'Calendar' },
     { type: 'link', path: '/reports', label: 'التقارير', icon: 'BarChart3' },
     { type: 'link', path: '/settings', label: 'الإعدادات', icon: 'Settings' },
     { type: 'divider', label: 'الإدارة' },
@@ -86,7 +87,7 @@ export const NAV_ITEMS = {
   booking: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
     { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار المؤكدة', icon: 'FileText' },
-    { type: 'link', path: '/bookings', label: 'الحجوزات', icon: 'Calendar' },
-    { type: 'link', path: '/vouchers', label: 'القسائم', icon: 'Ticket' },
+    { type: 'link', path: '/dashboard/bookings', label: 'الحجوزات والعمليات', icon: 'Calendar' },
+    { type: 'link', path: '/dashboard/bookings', label: 'القسائم', icon: 'Ticket' },
   ],
 } as const;
