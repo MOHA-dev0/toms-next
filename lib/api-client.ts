@@ -24,7 +24,9 @@ async function fetcher(url: string, options: FetchOptions = {}) {
   const response = await fetch(`${API_BASE}${url}`, config)
 
   if (response.status === 401) {
-    window.location.href = '/auth'
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
+      window.location.href = '/auth'
+    }
     throw new Error('Unauthorized')
   }
 
