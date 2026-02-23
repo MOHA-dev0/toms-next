@@ -4,7 +4,7 @@ import Providers from './providers'
 
 export const metadata: Metadata = {
   title: 'TOMS - Tourism Management System',
-  description: 'Safar Shomal Rakam Tourism Management System',
+  description: ' Tourism Management System',
 }
 
 export default function RootLayout({
