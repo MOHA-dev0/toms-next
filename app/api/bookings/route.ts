@@ -14,17 +14,22 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const tab = searchParams.get('tab') || 'confirmed';
 
+    const accessFilters = getAccessFilters(userContext, 'booking');
+    
     if (tab === 'bookings') {
       const bookings = await prisma.booking.findMany({
-        where: search
-          ? {
-              OR: [
-                { referenceNumber: { contains: search } },
-                { quotation: { referenceNumber: { contains: search } } },
-                { vouchers: { some: { voucherCode: { contains: search } } } },
-              ],
-            }
-          : undefined,
+        where: {
+          ...accessFilters,
+          ...(search
+            ? {
+                OR: [
+                  { referenceNumber: { contains: search } },
+                  { quotation: { referenceNumber: { contains: search } } },
+                  { vouchers: { some: { voucherCode: { contains: search } } } },
+                ],
+              }
+            : {}),
+        },
         include: {
           quotation: { include: { customer: true, destinationCity: true } },
           bookingEmployee: true,
@@ -35,9 +40,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(bookings);
     }
 
-    // All confirmed quotations (from all employees) — include bookings to show status
+    // All confirmed quotations — apply access filters to show only my sales if I'm a sales user
     const confirmed = await prisma.quotation.findMany({
       where: {
+        ...getAccessFilters(userContext, 'quotation'),
         status: 'confirmed',
         ...(search
           ? {

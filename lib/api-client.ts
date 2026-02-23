@@ -23,6 +23,11 @@ async function fetcher(url: string, options: FetchOptions = {}) {
 
   const response = await fetch(`${API_BASE}${url}`, config)
 
+  if (response.status === 401) {
+    window.location.href = '/auth'
+    throw new Error('Unauthorized')
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }))
     throw new Error(error.error || 'Request failed')

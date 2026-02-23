@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
           destinationCity: true,
           agent: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { updatedAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       })

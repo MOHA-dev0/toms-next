@@ -1,35 +1,16 @@
 "use client"
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { FileText, Plus, Search, Eye, Download, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
+import { FileText, Plus, Search, Download, ChevronRight, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useQuotations } from '@/hooks/useQuotations';
 import PaymentModal from './PaymentModal';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreVertical, Copy, FileEdit, Trash2, CreditCard, Printer, CheckCircle } from "lucide-react";
-
-interface Quotation {
-  id: string;
-  referenceNumber: string;
-  customerName: string;
-  agentName: string;
-  destination: string;
-  paxCount: number;
-  totalPrice: number;
-  paidAmount: number;
-  createdAt: Date;
-  status: string;
-}
+import { QuotationTable, Quotation } from '@/components/quotations/QuotationTable';
+import { useRouter } from 'next/navigation';
 
 interface Meta {
   totalCount: number;
@@ -41,6 +22,7 @@ interface Meta {
 }
 
 export default function QuotationsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   
@@ -77,11 +59,20 @@ export default function QuotationsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error('Failed to update status');
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update status');
+      }
+      
       toast.success('تم تحديث الحالة بنجاح');
       refetch();
-    } catch (e) {
-      toast.error('حدث خطأ أثناء تحديث الحالة');
+      
+      if (newStatus === 'confirmed') {
+        router.push(`/dashboard/quotations/${id}`);
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'حدث خطأ أثناء تحديث الحالة');
     }
   };
 
@@ -97,25 +88,6 @@ export default function QuotationsPage() {
     pageCount: 1,
   };
 
-  const getStatusBadge = (status: string, quotation?: Quotation) => {
-    // Check payment status first
-    if (quotation) {
-      const isFullyPaid = quotation.totalPrice > 0 && quotation.paidAmount >= quotation.totalPrice;
-      const isPartiallyPaid = quotation.totalPrice > 0 && quotation.paidAmount > 0 && quotation.paidAmount < quotation.totalPrice;
-      
-      if (isFullyPaid) {
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-50 text-green-600 border border-green-100">مدفوع بالكامل</span>;
-      } else if (isPartiallyPaid || status === 'confirmed') {
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">مؤكد</span>;
-      }
-    }
-
-    if (status === 'cancelled') {
-      return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-100">ملغي</span>;
-    }
-
-    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 text-orange-600 border border-orange-100">غير مؤكد</span>;
-  };
 
   const tabs = [
     { id: 'all', label: 'الكل' },
@@ -246,113 +218,14 @@ export default function QuotationsPage() {
           </div>
         ) : (
           <div className="flex-1 flex flex-col">
-            <div className="overflow-x-auto flex-1">
-              <Table>
-                <TableHeader className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
-                  <TableRow className="hover:bg-transparent border-b-slate-100">
-                    <TableHead className="text-right font-bold text-slate-500 py-3.5 px-6 w-32 whitespace-nowrap">رقم المرجع</TableHead>
-                    <TableHead className="text-right font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">العميل</TableHead>
-                    <TableHead className="text-right font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">الوكيل</TableHead>
-                    <TableHead className="text-right font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">الوجهة</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">تاريخ الدخول</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">عدد الأشخاص</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">الإجمالي</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">المدفوع</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 whitespace-nowrap">المتبقي</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 w-32 whitespace-nowrap">الحالة</TableHead>
-                    <TableHead className="text-center font-bold text-slate-500 py-3.5 px-6 w-24">الإجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {quotations.map((quotation) => (
-                    <TableRow key={quotation.id} className="hover:bg-slate-50/50 border-b border-slate-50/80 transition-colors group">
-                      <TableCell className="font-bold text-slate-700 px-6 py-4">
-                        {quotation.referenceNumber}
-                      </TableCell>
-                      <TableCell className="font-bold text-slate-700 px-6 py-4">
-                        {quotation.customerName}
-                      </TableCell>
-                      <TableCell className="font-medium text-slate-400 px-6 py-4">
-                        {quotation.agentName || <span className="opacity-50">-</span>}
-                      </TableCell>
-                      <TableCell className="font-medium text-slate-500 px-6 py-4">
-                        {quotation.destination || <span className="opacity-50">-</span>}
-                      </TableCell>
-                      <TableCell className="text-center font-medium text-slate-500 px-6 py-4 whitespace-nowrap">
-                        {new Date(quotation.createdAt).toLocaleDateString('en-GB')}
-                      </TableCell>
-                      <TableCell className="text-center font-bold text-slate-500 px-6 py-4">
-                        {quotation.paxCount}
-                      </TableCell>
-                      <TableCell className="text-center px-6 py-4 whitespace-nowrap">
-                        <span className="font-black text-slate-800">
-                          ${quotation.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center px-6 py-4 whitespace-nowrap">
-                        <span className="font-bold text-emerald-600">
-                          ${(quotation.paidAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center px-6 py-4 whitespace-nowrap">
-                        <span className="font-bold text-rose-600">
-                          ${Math.max(0, quotation.totalPrice - (quotation.paidAmount || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center px-6 py-4">
-                        {getStatusBadge(quotation.status, quotation)}
-                      </TableCell>
-                      <TableCell className="text-center px-6 py-4">
-                        <DropdownMenu dir="rtl">
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">فتح القائمة</span>
-                              <MoreVertical className="h-4 w-4 text-slate-400 hover:text-slate-600" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 text-right bg-white rounded-xl shadow-lg border border-slate-100 p-2">
-                            <Link href={`/dashboard/quotations/edit/${quotation.id}`} passHref>
-                              <DropdownMenuItem 
-                                className="focus:bg-slate-100 focus:text-slate-800 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors"
-                              >
-                                <span className="flex-1 text-right">تعديل العرض</span>
-                                <FileEdit className="h-4 w-4 ml-1 opacity-70" />
-                              </DropdownMenuItem>
-                            </Link>
-                            <DropdownMenuItem 
-                              className="focus:bg-emerald-50 focus:text-emerald-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors"
-                              onClick={() => {
-                                setSelectedQuotation(quotation);
-                                setIsPaymentModalOpen(true);
-                              }}
-                            >
-                              <span className="flex-1 text-right">إضافة دفعة</span>
-                              <CreditCard className="h-4 w-4 ml-1 opacity-70" />
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              className="focus:bg-blue-50 focus:text-blue-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors"
-                              onClick={() => handleUpdateStatus(quotation.id, 'confirmed')}
-                              disabled={quotation.status === 'confirmed'}
-                            >
-                              <span className="flex-1 text-right">تأكيد العرض</span>
-                              <CheckCircle className="h-4 w-4 ml-1 opacity-70" />
-                            </DropdownMenuItem>
-                            <Link href={`/dashboard/quotations/${quotation.id}`} passHref>
-                              <DropdownMenuItem 
-                                className="focus:bg-slate-100 focus:text-slate-800 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors"
-                              >
-                                <span className="flex-1 text-right">عرض و طباعة (View & Print)</span>
-                                <Eye className="h-4 w-4 ml-1 opacity-70" />
-                              </DropdownMenuItem>
-                            </Link>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <QuotationTable 
+              quotations={quotations}
+              onUpdateStatus={handleUpdateStatus}
+              onAddPayment={(quotation: Quotation) => {
+                setSelectedQuotation(quotation);
+                setIsPaymentModalOpen(true);
+              }}
+            />
             
             {/* Pagination */}
             {meta.pageCount > 1 && (

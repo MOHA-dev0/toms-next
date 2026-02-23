@@ -45,7 +45,7 @@ export default function EditQuotationPage() {
             passengers:
               data.passengers?.map((p: any) => ({
                 id: p.id,
-                name: p.name,
+                name: p.name && p.name.toLowerCase() !== 'unknown' ? p.name : '',
                 type: p.type,
               })) || [],
           },

@@ -26,8 +26,19 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
 
   const fmt = (d?: string | Date | null) => d ? format(new Date(d), 'dd/MM/yyyy') : '—';
   const dayOf = (d?: string | Date | null) => {
-    if (!startDate || !d) return '—';
+    if (!startDate || !d) return 0;
     return Math.max(1, differenceInDays(new Date(d), startDate) + 1);
+  };
+
+  const ordinalAr = (n: number): string => {
+    const names: Record<number, string> = {
+      1: 'الأول', 2: 'الثاني', 3: 'الثالث', 4: 'الرابع', 5: 'الخامس',
+      6: 'السادس', 7: 'السابع', 8: 'الثامن', 9: 'التاسع', 10: 'العاشر',
+      11: 'الحادي عشر', 12: 'الثاني عشر', 13: 'الثالث عشر', 14: 'الرابع عشر',
+      15: 'الخامس عشر', 16: 'السادس عشر', 17: 'السابع عشر', 18: 'الثامن عشر',
+      19: 'التاسع عشر', 20: 'العشرون',
+    };
+    return names[n] || `${n}`;
   };
 
   const destinations = (() => {
@@ -98,7 +109,7 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
                 <div key={idx} className="no-break border border-slate-200 rounded-xl overflow-hidden mb-3">
                   {/* شريط عنوان */}
                   <div className="bg-blue-800 text-white px-4 py-2.5 flex items-center justify-between text-sm">
-                    <span className="font-extrabold">اليوم {dayOf(h.checkIn)} ← اليوم {dayOf(h.checkOut)}</span>
+                    <span className="font-extrabold">اليوم {ordinalAr(dayOf(h.checkIn) as number)} ← اليوم {ordinalAr(dayOf(h.checkOut) as number)}</span>
                     <div className="flex items-center gap-2.5">
                       <span className="bg-white/20 px-2.5 py-0.5 rounded-full text-xs font-bold">🌙 {h.nights} {h.nights === 1 ? 'ليلة' : 'ليالي'}</span>
                       <span>{h.hotel?.city?.nameAr}</span>
@@ -148,10 +159,8 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
                       <tr>
                         <td className="align-top">
                           <CellLabel>الخط الجوي</CellLabel>
-                          <strong className="text-base">{f.airlineAr || 'غير محدد'}</strong>
                           {f.flightNumber && <div className="text-xs text-slate-500">{f.flightNumber}</div>}
                         </td>
-                        <td className="align-middle text-center text-xl">✈</td>
                         <td className="align-top text-left">
                           <CellLabel>تاريخ المغادرة</CellLabel>
                           <strong>{fmt(f.departureDate)}</strong>
@@ -173,7 +182,8 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
                   <div key={idx} className={`no-break flex gap-2.5 py-2 ${idx < cars.length - 1 ? 'border-b border-slate-200' : ''}`}>
                     <span className="text-indigo-500 text-lg shrink-0">✔</span>
                     <div>
-                      <div className="font-bold text-[15px]">{c.carTypeAr} — {c.pickupLocation}{c.dropoffLocation ? ` إلى ${c.dropoffLocation}` : ''}</div>
+                      {/* <div className="font-bold text-[15px]">{c.carTypeAr} — {c.pickupLocation}{c.dropoffLocation ? ` إلى ${c.dropoffLocation}` : ''}</div> */}
+                      <div className="font-bold text-[15px]">{c.carTypeAr}</div>
                       <div className="text-[13px] text-slate-500">{fmt(c.pickupDate)}{c.dropoffDate ? ` ← ${fmt(c.dropoffDate)}` : ''}</div>
                     </div>
                   </div>
@@ -219,28 +229,36 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
                     {/* جدول الخدمات */}
                     <table className="w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '25%' }} />
-                        <col style={{ width: '55%' }} />
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: '18%' }} />
+                        <col style={{ width: '60%' }} />
                       </colgroup>
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-bold">
-                          <th className="py-2 px-3 text-right border-l border-slate-200">اليوم</th>
-                          <th className="py-2 px-3 text-right border-l border-slate-200">التاريخ</th>
-                          <th className="py-2 px-3 text-right">الخدمة</th>
+                          <th className="py-2.5 px-3 text-right border-l border-slate-200">اليوم</th>
+                          <th className="py-2.5 px-3 text-right border-l border-slate-200">التاريخ</th>
+                          <th className="py-2.5 px-3 text-right">الخدمة</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {services.map((s: any, idx: number) => (
-                          <tr key={idx} className="border-b border-slate-100 last:border-b-0">
-                            <td className="py-3 px-3 text-blue-600 font-extrabold text-center text-base border-l border-slate-100">{dayOf(s.serviceDate)}</td>
-                            <td className="py-3 px-3 text-slate-600 text-[13px] text-center border-l border-slate-100">{fmt(s.serviceDate)}</td>
-                            <td className="py-3 px-3 text-sm">
-                              <div className="font-bold text-slate-800">{s.nameAr || s.service?.nameAr}</div>
-                              {s.descriptionAr && <div className="text-xs text-slate-400 mt-0.5">{s.descriptionAr}</div>}
-                            </td>
-                          </tr>
-                        ))}
+                        {services.map((s: any, idx: number) => {
+                          const dayNum = dayOf(s.serviceDate);
+                          return (
+                            <tr key={idx} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50">
+                              <td className="py-3.5 px-3 border-l border-slate-100">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span className="text-blue-600 font-black text-lg leading-none">{dayNum}</span>
+                                  <span className="text-[11px] font-bold text-blue-500/70">اليوم {ordinalAr(dayNum as number)}</span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-3 text-slate-600 text-[13px] text-center border-l border-slate-100">{fmt(s.serviceDate)}</td>
+                              <td className="py-3.5 px-3 text-sm">
+                                <div className="font-bold text-slate-800">{s.nameAr || s.service?.nameAr}</div>
+                                {s.descriptionAr && <div className="text-xs text-slate-400 mt-0.5">{s.descriptionAr}</div>}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

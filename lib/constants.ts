@@ -76,18 +76,19 @@ export const NAV_ITEMS = {
     { type: 'link', path: '/dashboard/companies', label: 'الشركات', icon: 'Building2' },
     { type: 'link', path: '/dashboard/agents', label: 'الوكلاء', icon: 'Briefcase' },
     { type: 'link', path: '/dashboard/employees', label: 'الموظفين', icon: 'Users' },
-    { type: 'link', path: '/financial-reports', label: 'التقارير المالية', icon: 'LineChart' },
+    { type: 'link', path: '/dashboard/financial-reports', label: 'التقارير المالية', icon: 'LineChart' },
   ],
   sales: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
     { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار', icon: 'FileText' },
-    { type: 'link', path: '/customers', label: 'العملاء', icon: 'Users' },
-    { type: 'link', path: '/payments', label: 'المدفوعات', icon: 'CreditCard' },
+     { type: 'link', path: '/reports', label: 'التقارير', icon: 'BarChart3' },
+    { type: 'link', path: '/settings', label: 'الإعدادات', icon: 'Settings' },
   ],
   booking: [
     { type: 'link', path: '/dashboard', label: 'لوحة التحكم', icon: 'LayoutDashboard' },
     { type: 'link', path: '/dashboard/quotations', label: 'عروض الأسعار المؤكدة', icon: 'FileText' },
     { type: 'link', path: '/dashboard/bookings', label: 'الحجوزات والعمليات', icon: 'Calendar' },
-    { type: 'link', path: '/dashboard/bookings', label: 'القسائم', icon: 'Ticket' },
+     { type: 'link', path: '/reports', label: 'التقارير', icon: 'BarChart3' },
+    { type: 'link', path: '/settings', label: 'الإعدادات', icon: 'Settings' },
   ],
 } as const;

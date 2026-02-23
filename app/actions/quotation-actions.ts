@@ -161,9 +161,10 @@ export async function getQuotations(options?: {
         destinationCity: true,
         agent: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' }
+      ],
       skip: (page - 1) * pageSize,
       take: pageSize,
     })
@@ -282,6 +283,7 @@ export async function finalizeQuotation(quotationId: string, data: {
     where: { id: quotationId },
     data: { 
       referenceNumber: finalReferenceNumber,
+      createdAt: existingQuotation.status === 'draft' ? new Date() : existingQuotation.createdAt,
       subtotal: data.subtotal,
       totalPrice: data.totalPrice,
       profit: data.profit,
@@ -299,10 +301,11 @@ export async function finalizeQuotation(quotationId: string, data: {
         ...(state.basicInfo.startDate && { startDate: new Date(state.basicInfo.startDate) }),
         ...(state.basicInfo.endDate && { endDate: new Date(state.basicInfo.endDate) }),
         passengers: {
-          create: state.basicInfo.passengers.map((p: any) => ({
-            name: p.name || 'Unknown',
+          create: state.basicInfo.passengers.map((p: any, index: number) => ({
+            name: p.name || '',
             type: p.type || 'adult',
-            passport: p.passport || null
+            passport: p.passport || null,
+            createdAt: new Date(Date.now() + index * 1000)
           }))
         }
       }),

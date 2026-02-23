@@ -101,9 +101,10 @@ export async function POST(req: Request) {
           // Use 'create: ...' for relation if client updated, else manual via separate call?
           // We will use relation create here assuming client update eventually.
           passengers: {
-            create: passengers.map((p: any) => ({
-              name: p.name,
-              type: p.type || 'adult'
+            create: passengers.map((p: any, index: number) => ({
+              name: p.name || '',
+              type: p.type || 'adult',
+              createdAt: new Date(Date.now() + index * 1000)
             }))
           }
         } as any // Cast to any to bypass type check on 'passengers'

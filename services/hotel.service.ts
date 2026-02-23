@@ -99,23 +99,54 @@ export const hotelService = {
       })
 
       if (data.roomTypes) {
-        // Delete all existing room types (careful!)
-        // Ideally we should match by some criteria or ID.
-        // For this MVP, let's assume we replace them.
-        await tx.roomType.deleteMany({
-          where: { hotelId: id },
-        })
+        // Collect IDs from the payload
+        const payloadIds = data.roomTypes
+          .filter((rt) => rt.id)
+          .map((rt) => rt.id as string);
 
-        await tx.roomType.createMany({
-          data: data.roomTypes.map((rt) => ({
-            hotelId: id,
-            nameAr: rt.nameAr,
-            board: rt.board,
-            basePrice: rt.price,
-            currency: rt.currency as any,
-            imageUrl: rt.imageUrl,
-          })),
-        })
+        // 1. Delete removed ones (if they are NOT in the payload)
+        // We do this individually to handle potential reference errors gracefully
+        const existingRooms = await tx.roomType.findMany({
+          where: { hotelId: id },
+          select: { id: true }
+        });
+
+        for (const existing of existingRooms) {
+          if (!payloadIds.includes(existing.id)) {
+            try {
+              await tx.roomType.delete({ where: { id: existing.id } });
+            } catch (e) {
+              console.warn(`Could not delete room type ${existing.id} - likely referenced in quotations.`);
+            }
+          }
+        }
+
+        // 2. Update existing or Create new
+        for (const rt of data.roomTypes) {
+          if (rt.id) {
+            await tx.roomType.update({
+              where: { id: rt.id },
+              data: {
+                nameAr: rt.nameAr,
+                board: rt.board,
+                basePrice: rt.price,
+                currency: rt.currency as any,
+                imageUrl: rt.imageUrl,
+              },
+            })
+          } else {
+            await tx.roomType.create({
+              data: {
+                hotelId: id,
+                nameAr: rt.nameAr,
+                board: rt.board,
+                basePrice: rt.price,
+                currency: rt.currency as any,
+                imageUrl: rt.imageUrl,
+              },
+            })
+          }
+        }
       }
 
       return hotel

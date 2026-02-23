@@ -23,6 +23,7 @@ import api from '@/lib/api-client';
 import { toast } from 'sonner';
 
 interface RoomTypeField {
+  id?: string;
   nameAr: string;
   board: string;
   price: string;
@@ -87,6 +88,7 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
         nameAr: initialData.nameAr,
         cityId: initialData.cityId,
         roomTypes: initialData.roomTypes.map(rt => ({
+          id: (rt as any).id,
           nameAr: rt.nameAr,
           board: rt.board || 'bb',
           price: String(rt.basePrice || rt.price || '0'),
@@ -200,7 +202,7 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '' })}
+                onClick={() => append({ id: undefined, nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '' })}
                 className="gap-2"
               >
                 <Plus className="w-4 h-4" />
@@ -221,6 +223,9 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
               <div className="divide-y">
                 {fields.map((field, index) => (
                   <div key={field.id} className="p-3 grid grid-cols-12 gap-4 items-center bg-card hover:bg-muted/10 transition-colors animate-in slide-in-from-top-2">
+                    {/* Hidden ID field for persistence */}
+                    <input type="hidden" {...register(`roomTypes.${index}.id` as const)} />
+                    
                     <div className="col-span-3">
                       <Controller
                         name={`roomTypes.${index}.nameAr` as const}

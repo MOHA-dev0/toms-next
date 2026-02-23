@@ -21,6 +21,23 @@ export default function StepHotels() {
     });
   }, []);
 
+  // Pre-load hotels for any existing segments (e.g. when editing)
+  const cityIdsString = hotelSegments.map(s => s.cityId).join(',');
+  useEffect(() => {
+    const uniqueCityIds = Array.from(new Set(cityIdsString.split(',').filter(Boolean)));
+    uniqueCityIds.forEach(cityId => {
+      setHotelsByCity(prev => {
+        if (prev[cityId]) return prev; // already loaded or loading
+        
+        getHotelsByCity(cityId).then(hotels => {
+          setHotelsByCity(current => ({ ...current, [cityId]: hotels }));
+        }).catch(err => console.error("Failed to load hotels for city", cityId, err));
+        
+        return { ...prev, [cityId]: [] }; // mark as loading temporarily
+      });
+    });
+  }, [cityIdsString]);
+
   useEffect(() => {
     // Check LIVE state to avoid strict mode double-mount issues
     if (useQuotationStore.getState().hotelSegments.length === 0) {
