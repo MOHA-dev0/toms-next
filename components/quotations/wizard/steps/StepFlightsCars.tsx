@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function StepFlightsCars() {
   const { 
@@ -46,8 +47,8 @@ export default function StepFlightsCars() {
     if (!isCarsEnabled) setSectionEnabled('cars', true);
   };
 
-  const handleDateChange = (id: string, field: 'pickupDate' | 'dropoffDate', value: string) => {
-    const date = new Date(value);
+  const handleDateChange = (id: string, field: 'pickupDate' | 'dropoffDate', date?: Date) => {
+    if (!date) return;
     const rental = carRentals.find(r => r.id === id);
     if (!rental) return;
 
@@ -107,11 +108,12 @@ export default function StepFlightsCars() {
                         {flights.map((flight) => (
                             <TableRow key={flight.id}>
                                 <TableCell>
-                                    <Input 
-                                        type="date"
-                                        className="h-9"
-                                        value={flight.date ? new Date(flight.date).toISOString().split('T')[0] : ''}
-                                        onChange={(e) => updateFlight(flight.id, { date: new Date(e.target.value) })}
+                                    <DatePicker 
+                                        className="h-9 w-[140px]"
+                                        date={flight.date ? new Date(flight.date) : undefined}
+                                        setDate={(date) => {
+                                            if (date) updateFlight(flight.id, { date });
+                                        }}
                                     />
                                 </TableCell>
                                 <TableCell>
@@ -228,19 +230,17 @@ export default function StepFlightsCars() {
                         {carRentals.map((rental) => (
                             <TableRow key={rental.id}>
                                 <TableCell>
-                                    <Input 
-                                        type="date"
-                                        className="h-9"
-                                        value={rental.pickupDate ? new Date(rental.pickupDate).toISOString().split('T')[0] : ''}
-                                        onChange={(e) => handleDateChange(rental.id, 'pickupDate', e.target.value)}
+                                    <DatePicker 
+                                        className="h-9 w-[140px]"
+                                        date={rental.pickupDate ? new Date(rental.pickupDate) : undefined}
+                                        setDate={(date) => handleDateChange(rental.id, 'pickupDate', date)}
                                     />
                                 </TableCell>
                                 <TableCell>
-                                    <Input 
-                                        type="date"
-                                        className="h-9"
-                                        value={rental.dropoffDate ? new Date(rental.dropoffDate).toISOString().split('T')[0] : ''}
-                                        onChange={(e) => handleDateChange(rental.id, 'dropoffDate', e.target.value)}
+                                    <DatePicker 
+                                        className="h-9 w-[140px]"
+                                        date={rental.dropoffDate ? new Date(rental.dropoffDate) : undefined}
+                                        setDate={(date) => handleDateChange(rental.id, 'dropoffDate', date)}
                                     />
                                 </TableCell>
                                 <TableCell>

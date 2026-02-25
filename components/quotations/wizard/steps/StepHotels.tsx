@@ -6,6 +6,7 @@ import { getHotelsByCity, getQuotationReferenceData } from "@/app/actions/quotat
 import { Plus, Trash2, Calendar, Hotel, Moon, Coins } from "lucide-react";
 import { toast } from "sonner";
 import { HotelSegment } from "@/lib/store/quotationStore";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function StepHotels() {
   const { basicInfo, hotelSegments, addHotelSegment, updateHotelSegment, removeHotelSegment } = useQuotationStore();
@@ -41,10 +42,15 @@ export default function StepHotels() {
   useEffect(() => {
     // Check LIVE state to avoid strict mode double-mount issues
     if (useQuotationStore.getState().hotelSegments.length === 0) {
+      const { basicInfo } = useQuotationStore.getState();
+      const defaultCheckIn = basicInfo.startDate ? new Date(basicInfo.startDate) : new Date();
+      const defaultCheckOut = basicInfo.endDate ? new Date(basicInfo.endDate) : new Date(new Date().setDate(new Date().getDate() + 1));
+      
       addHotelSegment({
         id: crypto.randomUUID(),
-        checkIn: new Date(),
-        checkOut: new Date(new Date().setDate(new Date().getDate() + 1)),
+        checkIn: defaultCheckIn,
+        checkOut: defaultCheckOut,
+        isDateManuallyEdited: false,
         cityId: "",
         hotelId: "",
         roomTypeId: "",
@@ -59,6 +65,43 @@ export default function StepHotels() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Synchronize unedited hotel dates with quotation dates
+  useEffect(() => {
+    if (!basicInfo.startDate || !basicInfo.endDate) return;
+
+    hotelSegments.forEach(segment => {
+      // If the dates have been explicitly manually edited in this session, skip
+      if (segment.isDateManuallyEdited) return;
+
+      const targetCheckIn = new Date(basicInfo.startDate!);
+      const targetCheckOut = new Date(basicInfo.endDate!);
+      
+      const currentCheckIn = new Date(segment.checkIn);
+      const currentCheckOut = new Date(segment.checkOut);
+
+      // If segment is loaded from DB (isDateManuallyEdited is undefined)
+      if (segment.isDateManuallyEdited === undefined) {
+          // If the DB dates already differ from the quotation dates, 
+          // they must have been manually edited in a previous session
+          if (
+              currentCheckIn.getTime() !== targetCheckIn.getTime() ||
+              currentCheckOut.getTime() !== targetCheckOut.getTime()
+          ) {
+              updateHotelSegment(segment.id, { isDateManuallyEdited: true });
+              return;
+          }
+      }
+
+      // Auto-sync if they differ and haven't been manually edited
+      if (
+        currentCheckIn.getTime() !== targetCheckIn.getTime() ||
+        currentCheckOut.getTime() !== targetCheckOut.getTime()
+      ) {
+        updateHotelSegment(segment.id, { checkIn: targetCheckIn, checkOut: targetCheckOut });
+      }
+    });
+  }, [basicInfo.startDate, basicInfo.endDate, hotelSegments, updateHotelSegment]);
 
   const handleCityChange = async (segmentId: string, cityId: string) => {
     updateHotelSegment(segmentId, { cityId, hotelId: "", roomTypeId: "" });
@@ -172,20 +215,40 @@ export default function StepHotels() {
                 {/* 1. Dates */}
                 <div className="space-y-1">
                     <label className="text-sm font-medium text-gray-600">تاريخ الدخول</label>
-                    <input 
-                        type="date"
-                        className="w-full p-2 border rounded-md"
-                        value={new Date(segment.checkIn).toISOString().split('T')[0]}
-                        onChange={(e) => handlePriceUpdate(segment.id, { checkIn: new Date(e.target.value) }, segment)}
+                    <DatePicker 
+                        date={segment.checkIn ? new Date(segment.checkIn) : undefined}
+                        setDate={(newCheckIn) => {
+                            if (!newCheckIn) return;
+                            const updates: Partial<HotelSegment> = { checkIn: newCheckIn, isDateManuallyEdited: true };
+                            
+                            // Check-out must be after Check-in
+                            const currentCheckOut = new Date(segment.checkOut);
+                            if (newCheckIn >= currentCheckOut) {
+                                const minCheckOut = new Date(newCheckIn);
+                                minCheckOut.setDate(minCheckOut.getDate() + 1);
+                                updates.checkOut = minCheckOut;
+                                toast.info("تم تعديل تاريخ الخروج ليكون بعد تاريخ الدخول.");
+                            }
+                            
+                            handlePriceUpdate(segment.id, updates, segment);
+                        }}
                     />
                 </div>
                 <div className="space-y-1">
                     <label className="text-sm font-medium text-gray-600">تاريخ الخروج</label>
-                    <input 
-                        type="date"
-                        className="w-full p-2 border rounded-md"
-                        value={new Date(segment.checkOut).toISOString().split('T')[0]}
-                        onChange={(e) => handlePriceUpdate(segment.id, { checkOut: new Date(e.target.value) }, segment)}
+                    <DatePicker 
+                        date={segment.checkOut ? new Date(segment.checkOut) : undefined}
+                        setDate={(newCheckOut) => {
+                            if (!newCheckOut) return;
+                            const currentCheckIn = new Date(segment.checkIn);
+                            
+                            if (newCheckOut <= currentCheckIn) {
+                                toast.error("تاريخ الخروج يجب أن يكون بعد تاريخ الدخول.");
+                                return; // Stop update
+                            }
+                            
+                            handlePriceUpdate(segment.id, { checkOut: newCheckOut, isDateManuallyEdited: true }, segment);
+                        }}
                     />
                 </div>
                 
@@ -347,21 +410,28 @@ export default function StepHotels() {
       })}
 
       <button
-        onClick={() => addHotelSegment({
-            id: crypto.randomUUID(),
-            checkIn: new Date(),
-            checkOut: new Date(new Date().setDate(new Date().getDate() + 1)),
-            cityId: "",
-            hotelId: "",
-            roomTypeId: "",
-            boardType: "bb",
-            roomsCount: 1,
-            usage: "dbl",
-            purchasePrice: 0,
-            sellingPrice: 0,
-            currency: "USD",
-            isVoucherVisible: true,
-        })}
+        onClick={() => {
+            const { basicInfo } = useQuotationStore.getState();
+            const defaultCheckIn = basicInfo.startDate ? new Date(basicInfo.startDate) : new Date();
+            const defaultCheckOut = basicInfo.endDate ? new Date(basicInfo.endDate) : new Date(new Date().setDate(new Date().getDate() + 1));
+            
+            addHotelSegment({
+                id: crypto.randomUUID(),
+                checkIn: defaultCheckIn,
+                checkOut: defaultCheckOut,
+                isDateManuallyEdited: false,
+                cityId: "",
+                hotelId: "",
+                roomTypeId: "",
+                boardType: "bb",
+                roomsCount: 1,
+                usage: "dbl",
+                purchasePrice: 0,
+                sellingPrice: 0,
+                currency: "USD",
+                isVoucherVisible: true,
+            });
+        }}
         className="w-full py-3 bg-dashed border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 font-medium"
       >
         <Plus size={20} />

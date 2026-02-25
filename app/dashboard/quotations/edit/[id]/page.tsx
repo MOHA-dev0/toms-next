@@ -89,7 +89,7 @@ export default function EditQuotationPage() {
               }) || [],
           otherServices:
             data.quotationServices
-              ?.filter((s: any) => !s.serviceId) // Services without linked master (custom)
+              ?.filter((s: any) => !s.serviceId && s.nameAr && s.nameAr !== 'بدون اسم') // Services without linked master (custom) that are not empty placeholders
               .map((s: any) => {
                 const sDate = s.serviceDate ? new Date(s.serviceDate) : new Date();
                 const qStart = data.startDate ? new Date(data.startDate) : sDate;

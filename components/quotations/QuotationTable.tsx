@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreVertical, FileEdit, CreditCard, CheckCircle, Eye } from 'lucide-react';
 import Link from 'next/link';
+import { format } from 'date-fns';
 
 export interface Quotation {
   id: string;
@@ -13,6 +14,7 @@ export interface Quotation {
   paxCount: number;
   totalPrice: number;
   paidAmount: number;
+  startDate: Date;
   createdAt: Date;
   status: string;
 }
@@ -78,7 +80,7 @@ export function QuotationTable({ quotations, onUpdateStatus, onAddPayment }: Quo
                 {quotation.destination || <span className="opacity-50">-</span>}
               </TableCell>
               <TableCell className="text-center font-medium text-slate-500 px-6 py-4 whitespace-nowrap">
-                {new Date(quotation.createdAt).toLocaleDateString('en-GB')}
+                {format(new Date(quotation.startDate), 'dd-MM-yyyy')}
               </TableCell>
               <TableCell className="text-center font-bold text-slate-500 px-6 py-4">
                 {quotation.paxCount}

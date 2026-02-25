@@ -351,7 +351,7 @@ export async function finalizeQuotation(quotationId: string, data: {
         },
         quotationServices: {
           create: [
-            ...(state.itineraryServices?.map((s: any) => ({
+            ...(state.itineraryServices?.filter((s: any) => s.serviceId || (s.name && s.name.trim() !== '') || s.sellingPrice > 0).map((s: any) => ({
               ...(s.serviceId && validServiceIds.has(s.serviceId) ? { serviceId: s.serviceId } : {}),
               nameAr: s.name || 'بدون اسم',
               quantity: s.quantity || 1,
@@ -360,7 +360,7 @@ export async function finalizeQuotation(quotationId: string, data: {
               sellingPrice: s.sellingPrice || 0,
               descriptionAr: s.notes || null,
             })) || []),
-            ...(state.otherServices?.map((s: any) => ({
+            ...(state.otherServices?.filter((s: any) => s.serviceId || (s.name && s.name.trim() !== '') || s.sellingPrice > 0).map((s: any) => ({
               ...(s.serviceId && validServiceIds.has(s.serviceId) ? { serviceId: s.serviceId } : {}),
               nameAr: s.name || 'بدون اسم',
               quantity: s.quantity || 1,

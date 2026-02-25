@@ -13,6 +13,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const tab = searchParams.get('tab') || 'confirmed';
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const skip = (page - 1) * limit;
 
     const accessFilters = getAccessFilters(userContext, 'booking');
     
@@ -20,6 +23,7 @@ export async function GET(request: NextRequest) {
       const bookings = await prisma.booking.findMany({
         where: {
           ...accessFilters,
+          status: 'confirmed',
           ...(search
             ? {
                 OR: [
@@ -36,8 +40,27 @@ export async function GET(request: NextRequest) {
           vouchers: true,
         },
         orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
       });
-      return NextResponse.json(bookings);
+
+      const total = await prisma.booking.count({ 
+        where: {
+          ...accessFilters,
+          status: 'confirmed',
+          ...(search
+            ? {
+                OR: [
+                  { referenceNumber: { contains: search } },
+                  { quotation: { referenceNumber: { contains: search } } },
+                  { vouchers: { some: { voucherCode: { contains: search } } } },
+                ],
+              }
+            : {}),
+        }
+      });
+
+      return NextResponse.json({ data: bookings, total, page, limit });
     }
 
     // All confirmed quotations — apply access filters to show only my sales if I'm a sales user
@@ -45,6 +68,7 @@ export async function GET(request: NextRequest) {
       where: {
         ...getAccessFilters(userContext, 'quotation'),
         status: 'confirmed',
+        bookings: { none: { status: 'confirmed' } },
         ...(search
           ? {
               OR: [
@@ -66,9 +90,27 @@ export async function GET(request: NextRequest) {
         bookings: { include: { vouchers: true } },
       },
       orderBy: { updatedAt: 'desc' },
+      skip,
+      take: limit,
     });
 
-    return NextResponse.json(confirmed);
+    const total = await prisma.quotation.count({
+      where: {
+        ...getAccessFilters(userContext, 'quotation'),
+        status: 'confirmed',
+        bookings: { none: { status: 'confirmed' } },
+        ...(search
+          ? {
+              OR: [
+                { referenceNumber: { contains: search } },
+                { customer: { nameAr: { contains: search } } },
+              ],
+            }
+          : {}),
+      }
+    });
+
+    return NextResponse.json({ data: confirmed, total, page, limit });
   } catch (error) {
     console.error('Error fetching bookings:', error);
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });

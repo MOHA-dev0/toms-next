@@ -3,6 +3,7 @@
 import { useQuotationStore } from "@/lib/store/quotationStore";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { DatePicker } from "@/components/ui/date-picker";
 
 import { getQuotationReferenceData } from "@/app/actions/quotation-actions";
 
@@ -165,12 +166,10 @@ export default function StepBasicInfo() {
           {/* Start Date */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">تاريخ البداية (Start Date)</label>
-            <input
-              type="date"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-right"
-              value={basicInfo.startDate ? new Date(basicInfo.startDate).toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                const newDate = e.target.value ? new Date(e.target.value) : undefined;
+            <DatePicker
+              className="w-full border-gray-300 focus:ring-2 focus:ring-blue-500"
+              date={basicInfo.startDate ? new Date(basicInfo.startDate) : undefined}
+              setDate={(newDate) => {
                 let newEndDate = basicInfo.endDate;
                 
                 if (newDate && basicInfo.nights) {
@@ -211,11 +210,11 @@ export default function StepBasicInfo() {
           {/* End Date (Auto-calculated) */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">تاريخ النهاية (End Date)</label>
-            <input
-              type="date"
-              className="w-full p-2 border border-gray-200 bg-gray-100 rounded-md text-gray-600 text-right cursor-not-allowed"
-              value={basicInfo.endDate ? new Date(basicInfo.endDate).toISOString().split('T')[0] : ''}
-              readOnly
+            <DatePicker
+              className="w-full border-gray-200 bg-gray-100 text-gray-600 opacity-70"
+              date={basicInfo.endDate ? new Date(basicInfo.endDate) : undefined}
+              setDate={() => {}}
+              disabled
             />
           </div>
         </div>
@@ -336,7 +335,7 @@ export default function StepBasicInfo() {
 
       <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border border-gray-200 mt-6">
         <div className="text-sm text-gray-500">
-             * سيتم إنشاء رقم الحجز والمرجع تلقائياً عند حفظ المسودة.
+             * سيتم إنشاء رقم المرجع تلقائياً عند حفظ المسودة.
         </div>
         
         {/* Save/Next handled by Wizard container usually, but shown here for layout check */}

@@ -18,7 +18,7 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
   const flights = quotation.quotationFlights || [];
   const cars = quotation.quotationCars || [];
   const itnServices = (quotation.quotationServices || []).filter((s: any) => s.serviceId);
-  const otherServices = (quotation.quotationServices || []).filter((s: any) => !s.serviceId);
+  const otherServices = (quotation.quotationServices || []).filter((s: any) => !s.serviceId && s.nameAr && s.nameAr !== 'بدون اسم');
 
   const startDate = quotation.startDate ? new Date(quotation.startDate) : (hotels[0] ? new Date(hotels[0].checkIn) : null);
   const endDate = quotation.endDate ? new Date(quotation.endDate) : (hotels.length > 0 ? new Date(hotels[hotels.length - 1].checkOut) : null);

@@ -119,9 +119,9 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px]" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-right">
+          <DialogTitle className="text-right text-lg font-bold">
             {initialData ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}
           </DialogTitle>
         </DialogHeader>
@@ -158,9 +158,9 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
                   <SelectTrigger dir="rtl" className="w-full">
                     <SelectValue placeholder="اختر المدينة" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent dir="rtl">
                     {cities.map((city) => (
-                      <SelectItem key={city.id} value={city.id}>
+                      <SelectItem key={city.id} value={city.id} className="text-right">
                         {city.nameAr}
                       </SelectItem>
                     ))}
@@ -190,16 +190,16 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
                 control={control}
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger className="text-center">
+                    <SelectTrigger className="w-full" dir="rtl">
                       <SelectValue placeholder="USD" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="TRY">TRY</SelectItem>
-                      <SelectItem value="SAR">SAR</SelectItem>
-                      <SelectItem value="AED">AED</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
+                    <SelectContent dir="rtl">
+                      <SelectItem value="USD" className="text-right">USD</SelectItem>
+                      <SelectItem value="EUR" className="text-right">EUR</SelectItem>
+                      <SelectItem value="TRY" className="text-right">TRY</SelectItem>
+                      <SelectItem value="SAR" className="text-right">SAR</SelectItem>
+                      <SelectItem value="AED" className="text-right">AED</SelectItem>
+                      <SelectItem value="GBP" className="text-right">GBP</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -207,11 +207,11 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:justify-start">
+          <DialogFooter className="gap-2 justify-end sm:justify-end mt-4">
              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               إلغاء
             </Button>
-            <Button type="submit" disabled={mutation.isPending} className="bg-blue-900 hover:bg-blue-800">
+            <Button type="submit" disabled={mutation.isPending} className="bg-blue-900 hover:bg-blue-800 text-white">
               {mutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
             </Button>
           </DialogFooter>

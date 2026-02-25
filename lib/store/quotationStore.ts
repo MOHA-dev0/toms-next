@@ -13,6 +13,7 @@ export interface HotelSegment {
   id: string;
   checkIn: Date;
   checkOut: Date;
+  isDateManuallyEdited?: boolean;
   cityId: string;
   hotelId: string;
   roomTypeId: string;

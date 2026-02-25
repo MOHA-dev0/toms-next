@@ -24,16 +24,7 @@ export async function POST(req: Request) {
     // Cast to any because Prisma Client types may be outdated due to locked 'prisma generate' process
     const result = await prisma.$transaction(async (tx: any) => {
       
-      // 1. Generate Booking Number (Master Reference) via Raw SQL due to client generation lock
-      await tx.$executeRaw`
-        INSERT INTO system_sequences (\`key\`, last_seq, prefix, updated_at) 
-        VALUES ('booking', 1, 'BK', NOW()) 
-        ON DUPLICATE KEY UPDATE last_seq = last_seq + 1, updated_at = NOW();
-      `;
-      
-      const bookingSeqRes = await tx.$queryRaw`SELECT last_seq FROM system_sequences WHERE \`key\` = 'booking'`;
-      const bookingSeq = Number((bookingSeqRes as any)[0].last_seq);
-      const bookingNumber = `BK-${String(bookingSeq).padStart(6, '0')}`;
+
 
       // 2. Generate Quotation Number
       await tx.$executeRaw`
@@ -110,19 +101,7 @@ export async function POST(req: Request) {
         } as any // Cast to any to bypass type check on 'passengers'
       });
 
-      // 4. Create Booking (Master Reference) linked to this Quotation
-      const booking = await tx.booking.create({
-        data: {
-          referenceNumber: bookingNumber,
-          quotationId: quotation.id,
-          bookingEmployeeId: salesEmployeeId, // Assigned to sales rep initially
-          status: 'pending',
-        }
-      });
-
       return {
-        bookingNumber,
-        bookingId: booking.id,
         quotationNumber,
         quotationId: quotation.id
       };

@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, UserPlus, Mail, Phone, Shield, Search, Loader2, CheckCircle2, Clock, Trash2, User } from 'lucide-react'
+import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -233,14 +234,14 @@ export default function EmployeesPage() {
                   subtitle={inv.email}
                   icon={Mail}
                   footerLabel="تنتهي في:"
-                  footerValue={new Date(inv.expiresAt).toLocaleDateString('ar-EG')}
+                  footerValue={format(new Date(inv.expiresAt), 'dd-MM-yyyy')}
                   className="border-dashed border-blue-200 bg-blue-50/10"
                   metadata={
                     <div className="space-y-3 mt-4">
                       <div className="flex items-center justify-between">
                          <div className="flex items-center gap-2 text-gray-600">
                             <Clock className="w-4 h-4 text-orange-500" />
-                            <span>مرسلة بتاريخ: <span dir="ltr" className="inline-block">{new Date(inv.createdAt).toLocaleDateString('ar-EG')}</span></span>
+                            <span>مرسلة بتاريخ: <span dir="ltr" className="inline-block">{format(new Date(inv.createdAt), 'dd-MM-yyyy')}</span></span>
                          </div>
                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-100">معلقة</Badge>
                       </div>

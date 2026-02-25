@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Search, Ticket, CheckCircle, Package, Eye, MoreVertical, FileText, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type Tab = 'confirmed' | 'bookings';
 
@@ -13,6 +14,8 @@ export default function BookingsPage() {
   const [tab, setTab] = useState<Tab>('confirmed');
   const [search, setSearch] = useState('');
   const [data, setData] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -20,30 +23,35 @@ export default function BookingsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const p = new URLSearchParams({ tab });
+      const p = new URLSearchParams({ tab, page: page.toString(), limit: '10' });
       if (search.trim()) p.set('search', search.trim());
       const res = await fetch(`/api/bookings?${p}`);
       if (!res.ok) throw new Error();
-      setData(await res.json());
+      const result = await res.json();
+      // Depending on if it's the old or new API response shape
+      if (result.data) {
+        setData(result.data);
+        setTotalPages(Math.ceil(result.total / result.limit));
+      } else {
+        setData(result);
+        setTotalPages(1);
+      }
     } catch {
       toast.error('خطأ في جلب البيانات');
     } finally {
       setLoading(false);
     }
+  }, [tab, search, page]);
+
+  useEffect(() => { 
+    setPage(1); 
   }, [tab, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Close menu on click outside
-  useEffect(() => {
-    const handler = () => setOpenMenuId(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
-
   const handleConfirmBooking = async (quotationId: string) => {
     setOpenMenuId(null);
-    if (!confirm('هل تريد إنشاء الفواتشرات لهذا العرض؟')) return;
+    if (!confirm('هل تريد إنشاء الفاتورة لهذا العرض؟')) return;
     setConfirmingId(quotationId);
     try {
       const res = await fetch(`/api/bookings/${quotationId}/confirm`, {
@@ -61,10 +69,10 @@ export default function BookingsPage() {
         throw new Error(err.error || 'فشل');
       }
       const booking = await res.json();
-      toast.success(`تم إنشاء الفواتشرات بنجاح! (${booking.vouchers?.length || 0} فاوتشر)`);
-      fetchData(); // refresh the list
+      toast.success(`تم إنشاء الفواتير بنجاح!`);
+      router.push(`/dashboard/bookings/${booking.id}`);
     } catch (e: any) {
-      toast.error(e.message || 'فشل في إنشاء الفواتشرات');
+      toast.error(e.message || 'فشل في إنشاء الفواتير');
     } finally {
       setConfirmingId(null);
     }
@@ -76,7 +84,7 @@ export default function BookingsPage() {
     if (bk) router.push(`/dashboard/bookings/${bk.id}`);
   };
 
-  const fmt = (d?: string | null) => d ? format(new Date(d), 'dd/MM/yyyy') : '—';
+  const fmt = (d?: string | null) => d ? format(new Date(d), 'dd-MM-yyyy') : '—';
 
   return (
     <div className="flex-1 p-6 space-y-6" dir="rtl">
@@ -96,14 +104,14 @@ export default function BookingsPage() {
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'confirmed' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <CheckCircle className="w-4 h-4 inline ml-1.5" />
-            عروض مؤكدة
+            العروض المؤكدة (بالانتظار)
           </button>
           <button
             onClick={() => setTab('bookings')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'bookings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <Ticket className="w-4 h-4 inline ml-1.5" />
-            الحجوزات
+            الحجوزات (المفوترة)
           </button>
         </div>
         <div className="relative flex-1 max-w-md">
@@ -133,9 +141,9 @@ export default function BookingsPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-muted/50 text-xs text-muted-foreground font-bold border-b border-border">
-                <th className="py-3 px-4 text-right">رقم العرض</th>
+                <th className="py-3 px-4 text-right">رقم المرجع</th>
                 <th className="py-3 px-4 text-right">العميل</th>
-                <th className="py-3 px-4 text-right">موظف المبيعات</th>
+                <th className="py-3 px-4 text-right">منشئ العرض</th>
                 <th className="py-3 px-4 text-center">الفنادق</th>
                 <th className="py-3 px-4 text-center">السيارات</th>
                 <th className="py-3 px-4 text-right">التاريخ</th>
@@ -145,7 +153,7 @@ export default function BookingsPage() {
             </thead>
             <tbody>
               {data.map((q: any) => {
-                const hasBooking = q.bookings && q.bookings.length > 0;
+                const hasBooking = Array.isArray(q.bookings) && q.bookings.length > 0;
                 const voucherCount = hasBooking ? q.bookings[0]?.vouchers?.length || 0 : 0;
                 return (
                   <tr key={q.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
@@ -161,50 +169,67 @@ export default function BookingsPage() {
                     <td className="py-3 px-4 text-sm text-muted-foreground">{fmt(q.startDate)}</td>
                     <td className="py-3 px-4 text-center">
                       {hasBooking ? (
-                        <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-xs font-bold">
-                          ✅ {voucherCount} فاوتشر
-                        </span>
+                        <StatusBadge status={q.bookings[0].status} />
                       ) : confirmingId === q.id ? (
                         <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full mx-auto" />
                       ) : (
-                        <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-xs font-bold">بانتظار</span>
+                        <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm">
+                          ⏳ بانتظار الإصدار
+                        </span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-center relative">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === q.id ? null : q.id); }}
-                        className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                      </button>
-                      {openMenuId === q.id && (
-                        <div className="absolute left-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 min-w-[180px] py-1" onClick={(e) => e.stopPropagation()}>
-                          {!hasBooking ? (
-                            <button
-                              onClick={() => handleConfirmBooking(q.id)}
-                              className="w-full text-right px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
-                            >
-                              <FileText className="w-4 h-4 text-emerald-600" />
-                              إنشاء الفواتشرات
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => goToBooking(q)}
-                              className="w-full text-right px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
-                            >
-                              <Eye className="w-4 h-4 text-primary" />
-                              عرض الفاوتشرات
-                            </button>
-                          )}
-                          <button
-                            onClick={() => { setOpenMenuId(null); router.push(`/dashboard/quotations/${q.id}`); }}
-                            className="w-full text-right px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2"
-                          >
-                            <Printer className="w-4 h-4 text-muted-foreground" />
-                            عرض المسار
+                      <DropdownMenu dir="rtl">
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/50">
+                            <span className="sr-only">فتح القائمة</span>
+                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
                           </button>
-                        </div>
-                      )}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 text-right bg-white rounded-xl shadow-lg border border-slate-100 p-2 z-[999]">
+                          {!hasBooking ? (
+                            <DropdownMenuItem 
+                              onClick={() => handleConfirmBooking(q.id)}
+                              className="focus:bg-emerald-50 focus:text-emerald-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
+                            >
+                              <span className="flex-1 text-right">إصدار الفواتير</span>
+                              <FileText className="w-4 h-4 ml-1 opacity-70 text-emerald-600" />
+                            </DropdownMenuItem>
+                          ) : q.bookings[0].status === 'pending' ? (
+                            <>
+                              <DropdownMenuItem 
+                                onClick={() => handleConfirmBooking(q.id)}
+                                className="focus:bg-emerald-50 focus:text-emerald-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
+                              >
+                                <span className="flex-1 text-right">إصدار الفواتير</span>
+                                <FileText className="w-4 h-4 ml-1 opacity-70 text-emerald-600" />
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => goToBooking(q)}
+                                className="focus:bg-blue-50 focus:text-blue-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
+                              >
+                                <span className="flex-1 text-right">عرض الحجز</span>
+                                <Eye className="w-4 h-4 ml-1 opacity-70 text-primary" />
+                              </DropdownMenuItem>
+                            </>
+                          ) : (
+                            <DropdownMenuItem 
+                              onClick={() => goToBooking(q)}
+                              className="focus:bg-blue-50 focus:text-blue-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
+                            >
+                              <span className="flex-1 text-right">عرض الفاتورة</span>
+                              <Eye className="w-4 h-4 ml-1 opacity-70 text-primary" />
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem 
+                            onClick={() => router.push(`/dashboard/quotations/${q.id}`)}
+                            className="focus:bg-slate-100 focus:text-slate-800 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
+                          >
+                            <span className="flex-1 text-right">عرض المسار</span>
+                            <Printer className="w-4 h-4 ml-1 opacity-70 text-muted-foreground" />
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 );
@@ -253,6 +278,29 @@ export default function BookingsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+          >
+            السابق
+          </button>
+          <span className="text-sm font-medium text-muted-foreground px-2">
+            صفحة {page} من {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition-colors"
+          >
+            التالي
+          </button>
         </div>
       )}
     </div>

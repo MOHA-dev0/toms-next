@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { getOtherServices } from "@/app/actions/quotation-actions";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function StepOtherServices() {
   const { basicInfo, otherServices, addService, updateService, removeService } = useQuotationStore();
@@ -86,11 +87,12 @@ export default function StepOtherServices() {
                     {otherServices.map((service, index) => (
                         <tr key={service.id} className="hover:bg-gray-50 transition-colors">
                             <td className="p-3">
-                                <input 
-                                    type="date"
-                                    className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                                    value={service.date ? new Date(service.date).toISOString().split('T')[0] : ''}
-                                    onChange={(e) => updateService(service.id, { date: new Date(e.target.value) }, 'other')}
+                                <DatePicker 
+                                    className="w-[140px]"
+                                    date={service.date ? new Date(service.date) : undefined}
+                                    setDate={(date) => {
+                                        if (date) updateService(service.id, { date }, 'other');
+                                    }}
                                 />
                             </td>
                             <td className="p-3 relative">
