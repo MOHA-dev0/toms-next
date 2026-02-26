@@ -43,11 +43,13 @@ export async function GET(request: Request): Promise<NextResponse<FinancialRepor
     }
 
     const { searchParams } = new URL(request.url);
-    const filter = searchParams.get('filter') || 'confirmed'; // Default to confirmed
+    const filter = searchParams.get('filter') || 'confirmed';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
     const fromDate = searchParams.get('from');
     const toDate = searchParams.get('to');
+    const source = searchParams.get('source');
+    const search = searchParams.get('search')?.trim();
     
     // Build where clause
     const whereClause: Prisma.QuotationWhereInput = {};
@@ -55,10 +57,21 @@ export async function GET(request: Request): Promise<NextResponse<FinancialRepor
     if (filter === 'confirmed') {
       whereClause.status = QuotationStatus.confirmed;
     } else if (filter !== 'all') {
-      // Type guard for QuotationStatus to prevent unsafe casting
       if (Object.values(QuotationStatus).includes(filter as QuotationStatus)) {
         whereClause.status = filter as QuotationStatus;
       }
+    }
+
+    if (source === 'b2b' || source === 'b2c') {
+      whereClause.source = source;
+    }
+
+    if (search) {
+      whereClause.OR = [
+        { referenceNumber: { contains: search } },
+        { customer: { is: { nameAr: { contains: search } } } },
+        { salesEmployee: { is: { nameAr: { contains: search } } } },
+      ];
     }
 
     if (fromDate || toDate) {

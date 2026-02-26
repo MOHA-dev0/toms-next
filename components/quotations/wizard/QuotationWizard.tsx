@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { finalizeQuotation } from "@/app/actions/quotation-actions";
 import { calculateQuotationTotals } from "@/lib/pricing-engine";
+import { createDraftQuotationSchema, formatZodErrors } from "@/lib/validations/quotation";
 
 interface QuotationWizardProps {
   isEditMode?: boolean;
@@ -24,6 +25,7 @@ interface QuotationWizardProps {
 export default function QuotationWizard({ isEditMode, existingStatus }: QuotationWizardProps = {}) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const router = useRouter();
   const queryClient = useQueryClient();
   const state = useQuotationStore();
@@ -36,35 +38,60 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
         return;
       }
 
-      // Validate Step 1
+      // ── Frontend validation (for instant UX feedback) ──
+      const payload = {
+        channel: basicInfo.channel,
+        agency: basicInfo.agencyId,
+        sales: basicInfo.salesPersonId,
+        company: basicInfo.companyId,
+        destinationCityIds: basicInfo.destinationCityIds,
+        startDate: basicInfo.startDate ? new Date(basicInfo.startDate).toISOString() : undefined,
+        nights: basicInfo.nights,
+        adults: basicInfo.adults,
+        children: basicInfo.children,
+        infants: basicInfo.infants,
+        passengers: basicInfo.passengers.map(p => ({
+          name: p.name,
+          type: p.type
+        })),
+        notes: basicInfo.notes,
+      };
+
+      const clientValidation = createDraftQuotationSchema.safeParse(payload);
+      if (!clientValidation.success) {
+        const errors = formatZodErrors(clientValidation.error);
+        setValidationErrors(errors);
+        // Show the first error as a toast for visibility
+        const firstError = Object.values(errors)[0];
+        if (firstError) {
+          toast.error(firstError);
+        }
+        return;
+      }
+
+      // Clear any previous errors
+      setValidationErrors({});
       setIsSubmitting(true);
+
       try {
         const response = await fetch('/api/quotations/create-draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                channel: basicInfo.channel,
-                agency: basicInfo.agencyId,
-                sales: basicInfo.salesPersonId,
-                ref: basicInfo.referenceNumber,
-                company: basicInfo.companyId,
-                destination: basicInfo.destinationCityIds?.[0], 
-                paxCount: basicInfo.adults, 
-                adults: basicInfo.adults,
-                children: basicInfo.children,
-                infants: basicInfo.infants,
-                passengers: basicInfo.passengers.map(p => ({
-                    name: p.name,
-                    type: p.type
-                }))
-            })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
 
         const data = await response.json();
         
         if (!response.ok) {
-            console.error("Server Error Details:", data);
-            throw new Error(data.details || data.error || "Failed to create draft");
+          // Handle structured validation errors from backend
+          if (response.status === 400 && data.validationErrors) {
+            setValidationErrors(data.validationErrors);
+            const firstError = Object.values(data.validationErrors)[0] as string;
+            toast.error(firstError || data.error);
+          } else {
+            toast.error(data.details || data.error || "Failed to create draft");
+          }
+          return;
         }
         
         // Save the generated IDs to our store for future updates in the wizard
@@ -73,7 +100,7 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
           referenceNumber: data.quotationNumber 
         });
 
-        toast.success(`تم إنشاء الحجز بنجاح: ${data.bookingNumber}`);
+        toast.success(`تم إنشاء الحجز بنجاح: ${data.quotationNumber}`);
         
         setCurrentStep(2);
       } catch (error: any) {
@@ -127,9 +154,10 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
         }
     } else {
         if (currentStep === 2) {
-            const hasValidHotel = state.hotelSegments.some(h => h.hotelId && h.cityId);
-            if (!hasValidHotel) {
-                toast.error("At least one hotel must be added before continuing.");
+            // Hotels are optional, but if one is added it must have a room selected
+            const incompleteHotel = state.hotelSegments.find(h => h.hotelId && !h.roomTypeId);
+            if (incompleteHotel) {
+                toast.error("يجب اختيار نوع الغرفة لكل فندق مضاف ");
                 return;
             }
         }
@@ -150,7 +178,7 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
            <span>&gt;</span>
            <span className={currentStep >= 2 ? "text-blue-600 font-bold whitespace-nowrap" : "whitespace-nowrap"}>2. الفنادق</span>
            <span>&gt;</span>
-           <span className={currentStep >= 3 ? "text-blue-600 font-bold whitespace-nowrap" : "whitespace-nowrap"}>3. الخدمات</span>
+           <span className={currentStep >= 3 ? "text-blue-600 font-bold whitespace-nowrap" : "whitespace-noدwrap"}>3. الخدمات</span>
            <span>&gt;</span>
            <span className={currentStep >= 4 ? "text-blue-600 font-bold whitespace-nowrap" : "whitespace-nowrap"}>4. خدمات أخرى</span>
            <span>&gt;</span>
@@ -162,7 +190,7 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
 
       {/* Content */}
       <div className="min-h-[400px]">
-        {currentStep === 1 && <StepBasicInfo />}
+        {currentStep === 1 && <StepBasicInfo validationErrors={validationErrors} />}
         {currentStep === 2 && <StepHotels />}
         {currentStep === 3 && <StepServices />}
         {currentStep === 4 && <StepOtherServices />}

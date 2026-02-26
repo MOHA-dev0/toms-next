@@ -3,6 +3,52 @@ import prisma from '@/lib/prisma';
 import { getUserContext } from '@/lib/permissions';
 import { BOARD_TYPES } from '@/lib/constants';
 import { format } from 'date-fns';
+import type { Prisma, BoardType, VoucherType } from '@prisma/client';
+
+// ── Derived types from Prisma schema ──
+
+/** The shape of the quotation query with all includes */
+type QuotationWithRelations = Prisma.QuotationGetPayload<{
+  include: {
+    customer: true;
+    passengers: true;
+    quotationHotels: {
+      include: { hotel: { include: { city: true } }; roomType: true };
+    };
+    quotationCars: true;
+    quotationServices: {
+      include: { service: { include: { city: true } } };
+    };
+  };
+}>;
+
+/** A single quotation service with its service + city relation */
+type QuotationServiceWithRelations = QuotationWithRelations['quotationServices'][number];
+
+/** Request body shape for POST /api/bookings/[id]/confirm */
+interface ConfirmBookingBody {
+  notes?: string;
+  hotelNotes?: Record<string, string>;
+  hotelNotesTr?: Record<string, string>;
+}
+
+/** Shape for voucher creation input (without bookingId — Prisma nests it) */
+interface VoucherCreateInput {
+  voucherType: VoucherType;
+  voucherCode: string;
+  hotelId?: string;
+  guestNameAr: string;
+  guestNameTr: string;
+  checkIn?: Date;
+  checkOut?: Date;
+  roomTypeAr?: string;
+  roomTypeTr?: string;
+  boardAr?: string;
+  boardTr?: string;
+  notesAr?: string;
+  notesTr?: string;
+  createdBy?: string;
+}
 
 // POST /api/bookings/[id]/confirm — Create booking + generate vouchers
 export async function POST(
@@ -16,9 +62,9 @@ export async function POST(
     }
 
     const { id: quotationId } = await params;
-    const body = await request.json();
+    const body = (await request.json()) as ConfirmBookingBody;
 
-    const quotation = await prisma.quotation.findUnique({
+    const quotation: QuotationWithRelations | null = await prisma.quotation.findUnique({
       where: { id: quotationId },
       include: {
         customer: true,
@@ -49,15 +95,16 @@ export async function POST(
     const guestAr = lead?.name || quotation.customer?.nameAr || 'غير محدد';
     const guestTr = lead?.name || quotation.customer?.nameAr || 'Belirtilmemiş';
 
-    const vouchers: any[] = [];
+    const vouchers: VoucherCreateInput[] = [];
     let vi = 1;
-    const generateUniqueCode = () => { 
+    const generateUniqueCode = (): string => { 
       // Just numbers like 3364
       return Math.floor(1000 + Math.random() * 9000).toString() + (vi++).toString(); 
     };
 
     for (const h of quotation.quotationHotels) {
-      const b = h.board as keyof typeof BOARD_TYPES;
+      const b = h.board as BoardType;
+      const boardInfo = BOARD_TYPES[b as keyof typeof BOARD_TYPES];
       vouchers.push({
         voucherType: 'hotel',
         voucherCode: generateUniqueCode(),
@@ -68,8 +115,8 @@ export async function POST(
         checkOut: h.checkOut,
         roomTypeAr: h.roomType?.nameAr || '',
         roomTypeTr: h.roomType?.nameTr || h.roomType?.nameAr || '',
-        boardAr: BOARD_TYPES[b]?.ar || h.board,
-        boardTr: BOARD_TYPES[b]?.tr || h.board,
+        boardAr: boardInfo?.ar || h.board,
+        boardTr: boardInfo?.tr || h.board,
         notesAr: h.notes || body.hotelNotes?.[h.id] || '',
         notesTr: h.notes || body.hotelNotesTr?.[h.id] || '',
         createdBy: userContext.employeeId,
@@ -89,22 +136,19 @@ export async function POST(
     }
 
     // فاوتشر واحد يجمع كل الخدمات (جولات + خدمات أخرى)
-    const allServices = quotation.quotationServices || [];
-    const linesEn = allServices.map((s: any) => {
+    const allServices: QuotationServiceWithRelations[] = quotation.quotationServices || [];
+
+    const formatServiceLine = (s: QuotationServiceWithRelations): string => {
       const nameEn = s.service?.nameEn || s.nameAr || s.service?.nameAr || 'Service';
-      const cityEn = s.service?.city?.nameTr || 'City TBD';
+      const cityEn = s.service?.city?.nameTr || '-';
       const dateStr = s.serviceDate ? format(new Date(s.serviceDate), 'dd-MM-yyyy') : '';
       return `• ${nameEn} (${cityEn})${dateStr ? ` — ${dateStr}` : ''}`;
-    }).join('\n');
+    };
 
-    const linesAr = allServices.map((s: any) => {
-      const nameEn = s.service?.nameEn || s.nameAr || s.service?.nameAr || 'Service';
-      const cityEn = s.service?.city?.nameTr || 'City TBD';
-      const dateStr = s.serviceDate ? format(new Date(s.serviceDate), 'dd-MM-yyyy') : '';
-      return `• ${nameEn} (${cityEn})${dateStr ? ` — ${dateStr}` : ''}`;
-    }).join('\n');
+    const linesEn = allServices.map(formatServiceLine).join('\n');
+    const linesAr = allServices.map(formatServiceLine).join('\n');
 
-    if (allServices.length > 0) { // Added this check back to prevent empty voucher creation
+    if (allServices.length > 0) {
       vouchers.push({
         voucherType: 'other',
         voucherCode: generateUniqueCode(),
@@ -116,6 +160,11 @@ export async function POST(
       });
     }
 
+    const bookingInclude = {
+      vouchers: { include: { hotel: true } },
+      quotation: { include: { customer: true } },
+    } satisfies Prisma.BookingInclude;
+
     const booking = await prisma.$transaction(async (tx) => {
       // If there is an existing pending booking without vouchers, we just update it
       if (existing) {
@@ -126,7 +175,7 @@ export async function POST(
             notes: body.notes || existing.notes,
             vouchers: { create: vouchers },
           },
-          include: { vouchers: { include: { hotel: true } }, quotation: { include: { customer: true } } },
+          include: bookingInclude,
         });
       }
 
@@ -140,12 +189,12 @@ export async function POST(
           notes: body.notes || '',
           vouchers: { create: vouchers },
         },
-        include: { vouchers: { include: { hotel: true } }, quotation: { include: { customer: true } } },
+        include: bookingInclude,
       });
     });
 
     return NextResponse.json(booking, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error confirming booking:', error);
     return NextResponse.json({ error: 'Failed to confirm booking' }, { status: 500 });
   }

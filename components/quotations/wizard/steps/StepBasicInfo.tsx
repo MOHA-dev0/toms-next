@@ -7,7 +7,16 @@ import { DatePicker } from "@/components/ui/date-picker";
 
 import { getQuotationReferenceData } from "@/app/actions/quotation-actions";
 
-export default function StepBasicInfo() {
+interface StepBasicInfoProps {
+  validationErrors?: Record<string, string>;
+}
+
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p className="text-red-500 text-xs mt-1">{error}</p>;
+}
+
+export default function StepBasicInfo({ validationErrors = {} }: StepBasicInfoProps) {
   const { basicInfo, setBasicInfo, addPassenger, removePassenger, updatePassenger, syncPassengersCount } = useQuotationStore();
   const [mounted, setMounted] = useState(false);
   const [referenceData, setReferenceData] = useState<{
@@ -126,7 +135,7 @@ export default function StepBasicInfo() {
             {basicInfo.destinationCityIds.map((cityId, index) => (
                 <div key={index} className="flex gap-2">
                     <select
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-right bg-white"
+                        className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 text-right bg-white ${validationErrors.destinationCityIds ? 'border-red-400' : 'border-gray-300'}`}
                         value={cityId}
                         onChange={(e) => {
                             const newIds = [...basicInfo.destinationCityIds];
@@ -158,6 +167,7 @@ export default function StepBasicInfo() {
                 <Plus size={16} />
                 إضافة وجهة أخرى
             </button>
+            <FieldError error={validationErrors.destinationCityIds} />
           </div>
         </div>
 
@@ -181,6 +191,7 @@ export default function StepBasicInfo() {
                 setBasicInfo({ startDate: newDate, endDate: newEndDate });
               }}
             />
+            <FieldError error={validationErrors.startDate} />
           </div>
 
           {/* Nights */}
@@ -189,7 +200,7 @@ export default function StepBasicInfo() {
             <input
               type="number"
               min="1"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-right"
+              className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 text-right ${validationErrors.nights ? 'border-red-400' : 'border-gray-300'}`}
               value={basicInfo.nights || ''}
               onChange={(e) => {
                 const nights = parseInt(e.target.value) || 0;
@@ -205,6 +216,7 @@ export default function StepBasicInfo() {
               }}
               placeholder="0"
             />
+            <FieldError error={validationErrors.nights} />
           </div>
 
           {/* End Date (Auto-calculated) */}
@@ -288,11 +300,12 @@ export default function StepBasicInfo() {
               </label>
               <input
                 type="text"
-                className="w-full h-10 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-right"
+                className={`w-full h-10 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 text-right ${index === 0 && validationErrors.passengers ? 'border-red-400' : 'border-gray-300'}`}
                 value={passenger.name}
                 onChange={(e) => updatePassenger(passenger.id, { name: e.target.value })}
                 placeholder={`اسم المسافر ${index + 1} ${index > 0 ? '(اختياري)' : ''}`}
               />
+              {index === 0 && <FieldError error={validationErrors.passengers} />}
             </div>
             
             <div className="w-40 space-y-1">

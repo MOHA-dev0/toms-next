@@ -1,32 +1,44 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { createDraftQuotationSchema, formatZodErrors } from '@/lib/validations/quotation';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { 
-      channel, 
-      agency, 
-      sales, 
-      ref, 
-      company, 
-      destination, 
-      paxCount, 
-      passengers,
-      adults,
-      children,
-      infants
-    } = body;
 
-    // Use a transaction to ensure unique numbers and atomic creation
-    // Cast to any because Prisma Client types may be outdated due to locked 'prisma generate' process
+    // ── Step 1: Backend Validation (NEVER trust the frontend) ──
+    const parsed = createDraftQuotationSchema.safeParse({
+      channel: body.channel,
+      agency: body.agency,
+      sales: body.sales,
+      company: body.company,
+      destinationCityIds: body.destinationCityIds ?? [],
+      startDate: body.startDate,
+      nights: body.nights,
+      adults: body.adults,
+      children: body.children,
+      infants: body.infants,
+      passengers: body.passengers,
+      notes: body.notes,
+      customerId: body.customerId,
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: 'فشل التحقق من البيانات (Validation failed)',
+          validationErrors: formatZodErrors(parsed.error),
+        },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
+
+    // ── Transaction: Generate IDs + Create Draft ──
     const result = await prisma.$transaction(async (tx: any) => {
-      
-
-
-      // 2. Generate Quotation Number
+      // 1. Generate Quotation Number
       await tx.$executeRaw`
         INSERT INTO system_sequences (\`key\`, last_seq, prefix, updated_at) 
         VALUES ('quotation_draft', 1, 'D', NOW()) 
@@ -37,85 +49,87 @@ export async function POST(req: Request) {
       const quotationSeq = Number((quotationSeqRes as any)[0].last_seq);
       const quotationNumber = `D-${String(quotationSeq).padStart(4, '0')}`;
 
-      // 3. Create Draft Quotation FIRST
-      
-      // Map UI fields to DB fields
-      let customerId = body.customerId;
+      // 2. Resolve or Create Customer
+      let customerId = data.customerId;
 
       if (!customerId) {
-        const leadPassenger = (passengers && passengers.length > 0 && passengers[0]?.name) 
-          ? passengers[0].name 
-          : 'Unknown Client';
-        
+        const leadPassengerName =
+          data.passengers[0]?.name?.trim() || 'Unknown Client';
+
         const newCustomer = await tx.customer.create({
           data: {
-            nameAr: leadPassenger,
-            phone: '000000000', // Placeholder
+            nameAr: leadPassengerName,
+            phone: '000000000',
             email: null,
-          }
+          },
         });
         customerId = newCustomer.id;
       }
 
-      // Ensure salesEmployeeId is present (Required by DB)
-      let salesEmployeeId = sales;
+      // 3. Resolve Sales Employee
+      let salesEmployeeId = data.sales;
       if (!salesEmployeeId) {
-          // Fallback: Get first active employee
-          const firstEmployee = await tx.employee.findFirst({ where: { isActive: true } });
-          if (firstEmployee) {
-              salesEmployeeId = firstEmployee.id;
-          } else {
-              throw new Error("No active sales employee found to assign quotation.");
-          }
+        const firstEmployee = await tx.employee.findFirst({
+          where: { isActive: true },
+        });
+        if (firstEmployee) {
+          salesEmployeeId = firstEmployee.id;
+        } else {
+          throw new Error('No active sales employee found to assign quotation.');
+        }
       }
-      
-      // Create Quotation
+
+      // 4. Compute start/end dates
+      const startDate = new Date(data.startDate);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + data.nights);
+
+      // 5. Resolve destination city ID (first valid UUID from the list)
+      const validDestinationId = data.destinationCityIds.find(
+        (id) => id && id.length === 36
+      );
+
+      // 6. Create the Quotation
       const quotation = await tx.quotation.create({
         data: {
           referenceNumber: quotationNumber,
           customerId: customerId,
           salesEmployeeId: salesEmployeeId,
-          agentId: agency,
-          source: channel === 'b2b' ? 'b2b' : 'b2c',
-          // Fix: destination can be free text now. Only link foreign key if it looks like a valid UUID.
-          // Otherwise, we might need a separate 'destinationText' field or just omit relation.
-          // For now: omit relation if free text.
-          destinationCityId: (destination && destination.length === 36) ? destination : null,
-          // Store free text destination in notes if not a valid ID? 
-          notes: (destination && destination.length !== 36) ? `Destination: ${destination}` : null,
-          adults: adults || paxCount,
-          children: children || 0,
-          infants: infants || 0,
+          agentId: data.agency || null,
+          source: data.channel === 'b2b' ? 'b2b' : 'b2c',
+          destinationCityId: validDestinationId || null,
+          notes: data.notes || null,
+          adults: data.adults || 1,
+          children: data.children || 0,
+          infants: data.infants || 0,
           status: 'draft',
-          startDate: new Date(), 
-          endDate: new Date(),
-          // Use 'create: ...' for relation if client updated, else manual via separate call?
-          // We will use relation create here assuming client update eventually.
+          startDate,
+          endDate,
           passengers: {
-            create: passengers.map((p: any, index: number) => ({
+            create: data.passengers.map((p, index) => ({
               name: p.name || '',
               type: p.type || 'adult',
-              createdAt: new Date(Date.now() + index * 1000)
-            }))
-          }
-        } as any // Cast to any to bypass type check on 'passengers'
+              createdAt: new Date(Date.now() + index * 1000),
+            })),
+          },
+        } as any,
       });
 
       return {
         quotationNumber,
-        quotationId: quotation.id
+        quotationId: quotation.id,
       };
     });
 
     return NextResponse.json(result);
-
   } catch (error: any) {
     console.error('Error creating quotation draft:', error);
-    return NextResponse.json({ 
+    return NextResponse.json(
+      {
         error: 'Failed to create quotation draft',
         details: error?.message || String(error),
-        stack: error?.stack 
-    }, { status: 500 });
+      },
+      { status: 500 }
+    );
   }
 }
-
