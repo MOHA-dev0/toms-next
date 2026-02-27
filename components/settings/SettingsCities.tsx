@@ -119,7 +119,7 @@ export function SettingsCities() {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2">
               <Plus className="w-4 h-4" />
-              إضافة مدينة
+              إضافة مدينة324324
             </Button>
           </DialogTrigger>
           <DialogContent>

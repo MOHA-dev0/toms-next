@@ -50,7 +50,7 @@ export function DatePicker({
             mode="single"
             selected={date}
             onSelect={setDate}
-            // Display DD-MM-YYYY natively if needed but standard is handled by format above
+            defaultMonth={date}
             initialFocus
           />
         </div>

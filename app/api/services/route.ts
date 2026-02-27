@@ -11,6 +11,7 @@ const serviceSchema = z.object({
   purchasePrice: z.number().min(0).default(0),
   currency: z.enum(['USD', 'EUR', 'TRY', 'SAR', 'AED', 'GBP']).default('USD'),
   descriptionAr: z.string().optional(),
+  descriptionEn: z.string().optional(),
 });
 
 export async function GET() {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
         purchasePrice: validatedData.purchasePrice,
         currency: validatedData.currency,
         descriptionAr: validatedData.descriptionAr,
+        descriptionEn: validatedData.descriptionEn,
       },
     });
 

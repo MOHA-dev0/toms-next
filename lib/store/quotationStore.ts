@@ -23,6 +23,11 @@ export interface HotelSegment {
   purchasePrice: number;
   sellingPrice: number;
   currency: string;
+  // Currency conversion tracking
+  originalPrice?: number;       // Price as entered (in source currency)
+  originalCurrency?: string;    // Source currency (e.g. EUR)
+  exchangeRate?: number;        // Rate used for conversion (e.g. 1.08)
+  sellingPriceUsd?: number;     // Frozen USD equivalent
   notes?: string;
   isVoucherVisible: boolean;
 }

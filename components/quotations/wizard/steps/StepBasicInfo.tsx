@@ -144,7 +144,9 @@ export default function StepBasicInfo({ validationErrors = {} }: StepBasicInfoPr
                         }}
                     >
                         <option value="">اختر الوجهة...</option>
-                        {referenceData.cities.map(c => (
+                        {referenceData.cities
+                          .filter(c => c.id === cityId || !basicInfo.destinationCityIds.includes(c.id))
+                          .map(c => (
                             <option key={c.id} value={c.id}>{c.nameAr}</option>
                         ))}
                     </select>

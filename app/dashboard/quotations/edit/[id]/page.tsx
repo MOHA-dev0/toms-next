@@ -25,6 +25,22 @@ export default function EditQuotationPage() {
 
         setQuotationStatus(data.status);
 
+        // Helper: safely parse date strings without timezone shifting
+        // Extracts YYYY-MM-DD and creates at noon UTC to avoid drift
+        function toSafeDate(value: any): Date | undefined {
+          if (!value) return undefined;
+          const str = String(value);
+          const dateMatch = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+          if (dateMatch) {
+            const [, year, month, day] = dateMatch;
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+          }
+          return new Date(str);
+        }
+
+        const parsedStartDate = toSafeDate(data.startDate);
+        const parsedEndDate = toSafeDate(data.endDate);
+
         // Map backend data to local store structure
         setFullState({
           basicInfo: {
@@ -33,11 +49,13 @@ export default function EditQuotationPage() {
             salesPersonId: data.salesEmployeeId || undefined,
             referenceNumber: data.referenceNumber,
             quotationId: data.id,
-            companyId: undefined, // Not typically fetched directly in quotation details response unless joined
-            destinationCityIds: data.destinationCityId ? [data.destinationCityId] : [],
-            startDate: data.startDate ? new Date(data.startDate) : undefined,
-            endDate: data.endDate ? new Date(data.endDate) : undefined,
-            nights: data.startDate && data.endDate ? Math.ceil((new Date(data.endDate).getTime() - new Date(data.startDate).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+            companyId: data.companyId || undefined,
+            destinationCityIds: data.destinations?.length > 0 
+              ? data.destinations.map((d: any) => d.id) 
+              : (data.destinationCityId ? [data.destinationCityId] : []),
+            startDate: parsedStartDate,
+            endDate: parsedEndDate,
+            nights: parsedStartDate && parsedEndDate ? Math.ceil((parsedEndDate.getTime() - parsedStartDate.getTime()) / (1000 * 60 * 60 * 24)) : 0,
             adults: data.adults || 1,
             children: data.children || 0,
             infants: data.infants || 0,
@@ -52,8 +70,8 @@ export default function EditQuotationPage() {
           hotelSegments:
             data.quotationHotels?.map((h: any) => ({
               id: h.id,
-              checkIn: new Date(h.checkIn),
-              checkOut: new Date(h.checkOut),
+              checkIn: toSafeDate(h.checkIn) || new Date(),
+              checkOut: toSafeDate(h.checkOut) || new Date(),
               cityId: h.hotel?.cityId || "",
               hotelId: h.hotelId,
               roomTypeId: h.roomTypeId,
@@ -61,8 +79,12 @@ export default function EditQuotationPage() {
               roomsCount: h.roomsCount || 1,
               usage: h.usage || "dbl",
               purchasePrice: Number(h.purchasePrice) || 0,
-              sellingPrice: Number(h.sellingPrice) || 0,
+              sellingPrice: Number(h.sellingPrice) || 0, // Always USD (frozen)
               currency: "USD",
+              // Audit trail for display only (ConversionInfoBadge)
+              originalPrice: h.originalPrice ? Number(h.originalPrice) : undefined,
+              originalCurrency: h.originalCurrency || undefined,
+              exchangeRate: h.exchangeRate ? Number(h.exchangeRate) : undefined,
               notes: h.notes || "",
               isVoucherVisible: true,
             })) || [],
@@ -70,8 +92,8 @@ export default function EditQuotationPage() {
             data.quotationServices
               ?.filter((s: any) => s.serviceId) // Services with linked service master
               .map((s: any) => {
-                const sDate = s.serviceDate ? new Date(s.serviceDate) : new Date();
-                const qStart = data.startDate ? new Date(data.startDate) : sDate;
+                const sDate = toSafeDate(s.serviceDate) || new Date();
+                const qStart = parsedStartDate || sDate;
                 const dNum = Math.max(1, Math.floor((sDate.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
                 
                 return {
@@ -91,8 +113,8 @@ export default function EditQuotationPage() {
             data.quotationServices
               ?.filter((s: any) => !s.serviceId && s.nameAr && s.nameAr !== 'بدون اسم') // Services without linked master (custom) that are not empty placeholders
               .map((s: any) => {
-                const sDate = s.serviceDate ? new Date(s.serviceDate) : new Date();
-                const qStart = data.startDate ? new Date(data.startDate) : sDate;
+                const sDate = toSafeDate(s.serviceDate) || new Date();
+                const qStart = parsedStartDate || sDate;
                 const dNum = Math.max(1, Math.floor((sDate.getTime() - qStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
                 
                 return {
@@ -112,7 +134,7 @@ export default function EditQuotationPage() {
           flights:
             data.quotationFlights?.map((f: any) => ({
               id: f.id,
-              date: new Date(f.departureDate || new Date()),
+              date: toSafeDate(f.departureDate) || new Date(),
               description: f.flightNumber || "",
               type: "international",
               paxCount: f.passengers || 1,
@@ -123,8 +145,8 @@ export default function EditQuotationPage() {
           carRentals:
             data.quotationCars?.map((c: any) => ({
               id: c.id,
-              pickupDate: new Date(c.pickupDate || new Date()),
-              dropoffDate: new Date(c.dropoffDate || new Date()),
+              pickupDate: toSafeDate(c.pickupDate) || new Date(),
+              dropoffDate: toSafeDate(c.dropoffDate) || new Date(),
               days: c.days || 1,
               description: c.carTypeAr || "",
               price: Number(c.sellingPrice) || 0,

@@ -159,6 +159,7 @@ export async function getQuotations(options?: {
       include: {
         customer: true,
         destinationCity: true,
+        destinations: true, // Fetch multiple destinations if mapped
         agent: true,
       },
       orderBy: [
@@ -182,9 +183,11 @@ export async function getQuotations(options?: {
     quotations: quotations.map(q => ({
       id: q.id,
       referenceNumber: q.referenceNumber,
-      customerName: q.customer?.nameAr || 'غير محدد',
-      agentName: q.agent?.nameEn || '',
-      destination: q.destinationCity?.nameAr || 'غير محدد',
+      customerName: (q as any).customer?.nameAr || 'غير محدد',
+      agentName: (q as any).agent?.nameEn || '',
+      destination: (q as any).destinations?.length > 0 
+        ? (q as any).destinations.map((d: any) => d.nameAr).join(' - ') 
+        : ((q as any).destinationCity?.nameAr || 'غير محدد'),
       paxCount: (q.adults || 0) + (q.children || 0) + (q.infants || 0),
       totalPrice: q.totalPrice ? Number(q.totalPrice.toString()) : 0,
       createdAt: q.createdAt,
@@ -278,6 +281,27 @@ export async function finalizeQuotation(quotationId: string, data: {
   const validServices = await prisma.service.findMany({ select: { id: true } });
   const validServiceIds = new Set(validServices.map(s => s.id));
 
+  // Helper: safely parse a date value (string or Date) into a timezone-safe Date
+  // This prevents date shifting when the user is in a timezone ahead of UTC
+  function toSafeDate(value: any): Date | null {
+    if (!value) return null;
+    // If it's already a Date object, extract its local date parts
+    if (value instanceof Date) {
+      return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 12, 0, 0);
+    }
+    // If it's an ISO string like "2026-03-15T00:00:00.000Z" or "2026-03-15"
+    const str = String(value);
+    // Extract just the YYYY-MM-DD part to avoid timezone shifts
+    const dateMatch = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (dateMatch) {
+      const [, year, month, day] = dateMatch;
+      // Create date at noon UTC to avoid any edge-case timezone drift
+      return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0));
+    }
+    // Fallback
+    return new Date(str);
+  }
+
   await prisma.quotation.update({
     
     where: { id: quotationId },
@@ -294,12 +318,19 @@ export async function finalizeQuotation(quotationId: string, data: {
         adults: state.basicInfo.adults,
         children: state.basicInfo.children,
         infants: state.basicInfo.infants,
-        destinationCityId: state.basicInfo.destinationCityIds?.[0] || null,
+        destinationCityId: state.basicInfo.destinationCityIds?.[0] || null, // Keep for backward compatibility
+        destinations: {
+          set: (state.basicInfo.destinationCityIds || []).filter((id: string) => id && id.length === 36).map((id: string) => ({ id }))
+        },
         source: state.basicInfo.channel || 'b2c',
         agentId: state.basicInfo.agencyId || null,
         notes: state.basicInfo.notes || null,
-        ...(state.basicInfo.startDate && { startDate: new Date(state.basicInfo.startDate) }),
-        ...(state.basicInfo.endDate && { endDate: new Date(state.basicInfo.endDate) }),
+        // Always persist salesEmployeeId and companyId
+        ...(state.basicInfo.salesPersonId && { salesEmployeeId: state.basicInfo.salesPersonId }),
+        ...(state.basicInfo.companyId ? { companyId: state.basicInfo.companyId } : { companyId: null }),
+        // Always write dates using timezone-safe parsing (never skip them)
+        startDate: toSafeDate(state.basicInfo.startDate) || existingQuotation.startDate,
+        endDate: toSafeDate(state.basicInfo.endDate) || existingQuotation.endDate,
         passengers: {
           create: state.basicInfo.passengers.map((p: any, index: number) => ({
             name: p.name || '',
@@ -312,19 +343,31 @@ export async function finalizeQuotation(quotationId: string, data: {
 
       ...(state && {
         quotationHotels: {
-          create: state.hotelSegments?.map((h: any) => ({
-            hotelId: h.hotelId,
-            roomTypeId: h.roomTypeId,
-            checkIn: new Date(h.checkIn),
-            checkOut: new Date(h.checkOut),
-            nights: Math.max(1, Math.ceil((new Date(h.checkOut).getTime() - new Date(h.checkIn).getTime()) / (1000 * 60 * 60 * 24))),
-            roomsCount: h.roomsCount || 1,
-            usage: h.usage || 'dbl',
-            board: h.boardType || 'bb',
-            purchasePrice: h.purchasePrice || 0,
-            sellingPrice: h.sellingPrice || 0,
-            notes: h.notes || null,
-          })) || []
+          create: state.hotelSegments?.map((h: any) => {
+            const checkInDate = toSafeDate(h.checkIn) || new Date();
+            const checkOutDate = toSafeDate(h.checkOut) || new Date();
+            const nightsCount = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+            
+            return {
+              hotelId: h.hotelId,
+              roomTypeId: h.roomTypeId,
+              checkIn: checkInDate,
+              checkOut: checkOutDate,
+              nights: nightsCount,
+              roomsCount: h.roomsCount || 1,
+              usage: h.usage || 'dbl',
+              board: h.boardType || 'bb',
+              purchasePrice: h.purchasePrice || 0,
+              sellingPrice: h.sellingPrice || 0, // Always USD (converted at selection time)
+              notes: h.notes || null,
+              // Audit trail: original currency info (if converted from non-USD)
+              ...(h.originalPrice ? {
+                originalPrice: h.originalPrice,
+                originalCurrency: h.originalCurrency || null,
+                exchangeRate: h.exchangeRate || null,
+              } : {}),
+            };
+          }) || []
         },
         quotationFlights: {
           create: state.isFlightsEnabled ? (state.flights?.map((f: any) => ({
@@ -332,7 +375,7 @@ export async function finalizeQuotation(quotationId: string, data: {
             flightNumber: f.description, // using description as flight info
             departureCity: 'غير محدد',
             arrivalCity: 'غير محدد',
-            departureDate: new Date(f.date),
+            departureDate: toSafeDate(f.date) || new Date(),
             passengers: f.paxCount || 1,
             purchasePrice: 0,
             sellingPrice: f.price || 0,
@@ -342,8 +385,8 @@ export async function finalizeQuotation(quotationId: string, data: {
           create: state.isCarsEnabled ? (state.carRentals?.map((c: any) => ({
             carTypeAr: c.description,
             pickupLocation: 'غير محدد',
-            pickupDate: new Date(c.pickupDate),
-            dropoffDate: new Date(c.dropoffDate),
+            pickupDate: toSafeDate(c.pickupDate) || new Date(),
+            dropoffDate: toSafeDate(c.dropoffDate) || new Date(),
             days: c.days || 1,
             purchasePrice: 0,
             sellingPrice: c.price || 0,
@@ -355,7 +398,7 @@ export async function finalizeQuotation(quotationId: string, data: {
               ...(s.serviceId && validServiceIds.has(s.serviceId) ? { serviceId: s.serviceId } : {}),
               nameAr: s.name || 'بدون اسم',
               quantity: s.quantity || 1,
-              serviceDate: s.date ? new Date(s.date) : new Date(),
+              serviceDate: toSafeDate(s.date) || new Date(),
               purchasePrice: s.purchasePrice || 0,
               sellingPrice: s.sellingPrice || 0,
               descriptionAr: s.notes || null,
@@ -364,7 +407,7 @@ export async function finalizeQuotation(quotationId: string, data: {
               ...(s.serviceId && validServiceIds.has(s.serviceId) ? { serviceId: s.serviceId } : {}),
               nameAr: s.name || 'بدون اسم',
               quantity: s.quantity || 1,
-              serviceDate: s.date ? new Date(s.date) : new Date(),
+              serviceDate: toSafeDate(s.date) || new Date(),
               purchasePrice: s.purchasePrice || 0,
               sellingPrice: s.sellingPrice || 0,
               descriptionAr: s.notes || null,

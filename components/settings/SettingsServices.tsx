@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
-import { Plus, Edit, Trash2, Search, Map, MapPin } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Map, MapPin, FileText } from 'lucide-react';
 import api from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,8 @@ interface Service {
   id: string;
   nameAr: string;
   nameEn: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
   cityId: string;
   purchasePrice: number;
   currency: string;
@@ -50,6 +52,8 @@ interface Service {
 interface ServiceFormValues {
   nameAr: string;
   nameEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
   cityId: string;
   purchasePrice: number;
   currency: string;
@@ -82,13 +86,16 @@ export function SettingsServices() {
 
   const filteredServices = services.filter((service: Service) => 
     service.nameAr.includes(searchQuery) || 
-    (service.nameEn && service.nameEn.toLowerCase().includes(searchQuery.toLowerCase()))
+    (service.nameEn && service.nameEn.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (service.descriptionAr && service.descriptionAr.includes(searchQuery))
   );
 
   const { register, control, handleSubmit, reset, formState: { errors } } = useForm<ServiceFormValues>({
     defaultValues: {
       nameAr: '',
       nameEn: '',
+      descriptionAr: '',
+      descriptionEn: '',
       cityId: '',
       purchasePrice: 0,
       currency: 'USD'
@@ -100,6 +107,8 @@ export function SettingsServices() {
     reset({
       nameAr: service.nameAr,
       nameEn: service.nameEn || '',
+      descriptionAr: service.descriptionAr || '',
+      descriptionEn: service.descriptionEn || '',
       cityId: service.cityId,
       purchasePrice: service.purchasePrice,
       currency: service.currency || 'USD'
@@ -114,6 +123,8 @@ export function SettingsServices() {
       reset({
         nameAr: '',
         nameEn: '',
+        descriptionAr: '',
+        descriptionEn: '',
         cityId: '',
         purchasePrice: 0,
         currency: 'USD'
@@ -176,48 +187,46 @@ export function SettingsServices() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
-        <DialogContent dir="rtl">
+        <DialogContent dir="rtl" className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingService ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* Service Name (Arabic - internal only) */}
             <div className="space-y-2">
-              <Label>اسم الخدمة (عربي) <span className="text-red-500">*</span></Label>
+              <Label>
+                اسم الخدمة (عربي) <span className="text-red-500">*</span>
+                <span className="text-xs text-gray-400 mr-2">(للاستخدام الداخلي فقط)</span>
+              </Label>
               <Input {...register('nameAr', { required: 'الاسم بالعربي مطلوب' })} placeholder="مثال: جولة البسفور" />
               {errors.nameAr && <span className="text-red-500 text-sm">{errors.nameAr.message}</span>}
             </div>
-            
-            <div className="space-y-2">
-              <Label>اسم الخدمة (إنجليزي) <span className="text-red-500">*</span></Label>
-              <Input {...register('nameEn', { required: 'الاسم بالإنجليزي مطلوب' })} placeholder="Example: Bosphorus Tour" dir="ltr" />
-              {errors.nameEn && <span className="text-red-500 text-sm">{errors.nameEn.message}</span>}
-            </div>
 
-            <div className="space-y-2">
-              <Label>المدينة <span className="text-red-500">*</span></Label>
-              <Controller
-                name="cityId"
-                control={control}
-                rules={{ required: 'المدينة مطلوبة' }}
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                    <SelectTrigger dir="rtl">
-                      <SelectValue placeholder="اختر المدينة" />
-                    </SelectTrigger>
-                    <SelectContent dir="rtl">
-                      {cities.map((city: City) => (
-                        <SelectItem key={city.id} value={city.id}>
-                          {city.nameAr}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errors.cityId && <span className="text-red-500 text-sm">{errors.cityId.message}</span>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            {/* City, Price, Currency */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>المدينة <span className="text-red-500">*</span></Label>
+                <Controller
+                  name="cityId"
+                  control={control}
+                  rules={{ required: 'المدينة مطلوبة' }}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                      <SelectTrigger dir="rtl">
+                        <SelectValue placeholder="اختر المدينة" />
+                      </SelectTrigger>
+                      <SelectContent dir="rtl">
+                        {cities.map((city: City) => (
+                          <SelectItem key={city.id} value={city.id}>
+                            {city.nameAr}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.cityId && <span className="text-red-500 text-sm">{errors.cityId.message}</span>}
+              </div>
               <div className="space-y-2">
                 <Label>سعر التكلفة</Label>
                 <Input type="number" step="0.01" {...register('purchasePrice')} placeholder="0.00" />
@@ -246,6 +255,42 @@ export function SettingsServices() {
               </div>
             </div>
 
+            {/* Descriptions Section */}
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                📝 وصف الخدمة
+                <span className="text-xs font-normal text-gray-400">(يظهر في عروض الأسعار والفواتير)</span>
+              </h4>
+            </div>
+
+            {/* Description Arabic */}
+            <div className="space-y-2">
+              <Label>
+                الوصف بالعربي
+                <span className="text-xs text-amber-600 mr-2">(يظهر للعملاء في العروض العربية)</span>
+              </Label>
+              <textarea
+                {...register('descriptionAr')}
+                placeholder="بعد تناول الافطار في الفندق ننطلق في رحلتنا ونبدأ بزيارة..."
+                className="w-full min-h-[120px] p-3 border rounded-md text-right resize-y text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                dir="rtl"
+              />
+            </div>
+
+            {/* Description English */}
+            <div className="space-y-2">
+              <Label>
+                الوصف بالإنجليزي
+                <span className="text-xs text-amber-600 mr-2">(يظهر للعملاء في العروض الإنجليزية)</span>
+              </Label>
+              <textarea
+                {...register('descriptionEn')}
+                placeholder="After breakfast at the hotel, we start our trip by visiting..."
+                className="w-full min-h-[120px] p-3 border rounded-md text-left resize-y text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                dir="ltr"
+              />
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>إلغاء</Button>
               <Button type="submit" disabled={mutation.isPending}>
@@ -256,6 +301,7 @@ export function SettingsServices() {
         </DialogContent>
       </Dialog>
 
+      {/* Service Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredServices.map((service: Service) => (
           <div key={service.id} className="card-elevated p-6 bg-card text-card-foreground">
@@ -266,7 +312,6 @@ export function SettingsServices() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">{service.nameAr}</h3>
-                  <p className="text-sm text-muted-foreground">{service.nameEn}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -283,6 +328,27 @@ export function SettingsServices() {
               <MapPin className="w-4 h-4" />
               <span>{service.city?.nameAr || 'غير محدد'}</span>
             </div>
+
+            {/* Description preview */}
+            {service.descriptionAr && (
+              <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-100">
+                <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                  <FileText className="w-3 h-3" />
+                  <span>الوصف</span>
+                </div>
+                <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                  {service.descriptionAr}
+                </p>
+              </div>
+            )}
+
+            {/* Description EN indicator */}
+            {service.descriptionEn && (
+              <div className="mb-3 flex items-center gap-1 text-xs text-green-600">
+                <span>✓</span>
+                <span>يوجد وصف إنجليزي</span>
+              </div>
+            )}
 
             <div className="flex justify-between items-center text-sm pt-4 border-t">
               <span className="text-muted-foreground">التكلفة:</span>

@@ -79,14 +79,22 @@ export async function POST(req: Request) {
         }
       }
 
-      // 4. Compute start/end dates
-      const startDate = new Date(data.startDate);
+      // 4. Compute start/end dates (timezone-safe)
+      const startDateStr = String(data.startDate);
+      const startMatch = startDateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+      let startDate: Date;
+      if (startMatch) {
+        const [, y, m, d] = startMatch;
+        startDate = new Date(Date.UTC(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0));
+      } else {
+        startDate = new Date(data.startDate);
+      }
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + data.nights);
 
-      // 5. Resolve destination city ID (first valid UUID from the list)
-      const validDestinationId = data.destinationCityIds.find(
-        (id) => id && id.length === 36
+      // 5. Resolve destination city IDs (filtering valid UUIDs)
+      const validDestinationIds = data.destinationCityIds.filter(
+        (id: string) => id && id.length === 36
       );
 
       // 6. Create the Quotation
@@ -96,8 +104,12 @@ export async function POST(req: Request) {
           customerId: customerId,
           salesEmployeeId: salesEmployeeId,
           agentId: data.agency || null,
+          companyId: data.company || null,
           source: data.channel === 'b2b' ? 'b2b' : 'b2c',
-          destinationCityId: validDestinationId || null,
+          destinationCityId: validDestinationIds[0] || null, // Keep for backward compatibility
+          destinations: {
+            connect: validDestinationIds.map((id: string) => ({ id })),
+          },
           notes: data.notes || null,
           adults: data.adults || 1,
           children: data.children || 0,

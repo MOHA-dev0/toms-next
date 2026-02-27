@@ -19,11 +19,12 @@ export async function GET(
       include: {
         customer: true,
         destinationCity: true,
+        destinations: true,
         agent: true,
         quotationHotels: {
           include: {
             hotel: { include: { city: true } },
-            roomType: true,
+          roomType: true,
           }
         },
         quotationServices: {

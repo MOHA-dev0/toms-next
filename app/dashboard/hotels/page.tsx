@@ -79,6 +79,7 @@ export default function HotelsPage() {
         ...hotel,
         cityId: hotel.city.id, 
         roomTypes: hotel.roomTypes.map((rt: any) => ({
+          id: rt.id,
           nameAr: rt.nameAr,
           board: rt.board,
           price: rt.basePrice,

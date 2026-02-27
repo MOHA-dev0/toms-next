@@ -26,17 +26,19 @@ export default function StepServices() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Initialize services based on stay duration if empty
+  // Initialize services based on stay duration if empty (CREATE mode only)
   useEffect(() => {
     // Check LIVE state to avoid strict mode double-mount issues
-    const currentServices = useQuotationStore.getState().itineraryServices;
+    const liveState = useQuotationStore.getState();
+    
+    // In edit mode (quotationId exists), services are loaded from DB — never auto-create
+    if (liveState.basicInfo.quotationId) return;
+    
+    const currentServices = liveState.itineraryServices;
     
     if (currentServices.length === 0 && basicInfo.startDate && basicInfo.nights && basicInfo.nights > 0) {
       const startDate = new Date(basicInfo.startDate);
       
-      // prevent multiple calls in quick succession
-      if (currentServices.length > 0) return;
-
       for (let i = 0; i < basicInfo.nights; i++) {
         const currentDate = addDays(startDate, i);
         addService({

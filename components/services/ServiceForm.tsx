@@ -27,6 +27,8 @@ import { toast } from 'sonner';
 interface ServiceFormValues {
   nameAr: string;
   nameEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
   cityId: string;
   purchasePrice: string;
   currency: string;
@@ -36,6 +38,7 @@ interface ServiceFormProps {
   cities: any[]; 
   triggerButton?: React.ReactNode;
   initialData?: ServiceFormValues & { id?: string };
+  id?: string;
   onSuccess?: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -53,6 +56,8 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
     defaultValues: {
       nameAr: '',
       nameEn: '',
+      descriptionAr: '',
+      descriptionEn: '',
       cityId: '',
       purchasePrice: '',
       currency: 'USD'
@@ -64,6 +69,8 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
       reset({
         nameAr: initialData.nameAr,
         nameEn: initialData.nameEn || '',
+        descriptionAr: initialData.descriptionAr || '',
+        descriptionEn: initialData.descriptionEn || '',
         cityId: initialData.cityId,
         purchasePrice: String(initialData.purchasePrice || '0'),
         currency: initialData.currency || 'USD'
@@ -72,6 +79,8 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
       reset({
         nameAr: '',
         nameEn: '',
+        descriptionAr: '',
+        descriptionEn: '',
         cityId: '',
         purchasePrice: '',
         currency: 'USD'
@@ -84,7 +93,7 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
       const payload = {
         ...data,
         purchasePrice: parseFloat(data.purchasePrice),
-        sellingPrice: 0 // Defaulting for now
+        sellingPrice: 0
       };
       
       if (initialData?.id) {
@@ -119,7 +128,7 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-right text-lg font-bold">
             {initialData ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}
@@ -127,8 +136,12 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
+          {/* Service Name (Arabic) - for internal use only */}
           <div className="space-y-2">
-            <Label className="text-right block">اسم الخدمة (عربي) <span className="text-red-500">*</span></Label>
+            <Label className="text-right block">
+              اسم الخدمة (عربي) <span className="text-red-500">*</span>
+              <span className="text-xs text-gray-400 mr-2">(للاستخدام الداخلي فقط)</span>
+            </Label>
             <Input
               {...register('nameAr', { required: 'اسم الخدمة مطلوب' })}
               placeholder="مثال: جولة البسفور"
@@ -137,41 +150,32 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
             {errors.nameAr && <span className="text-red-500 text-sm">{errors.nameAr.message}</span>}
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-right block">اسم الخدمة (إنجليزي) <span className="text-red-500">*</span></Label>
-            <Input
-              {...register('nameEn', { required: 'اسم الخدمة بالإنجليزية مطلوب' })}
-              placeholder="Example: Bosphorus Tour"
-              dir="ltr"
-            />
-            {errors.nameEn && <span className="text-red-500 text-sm">{errors.nameEn.message}</span>}
-          </div>
+          {/* City & Price Row */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label className="text-right block">المدينة <span className="text-red-500">*</span></Label>
+              <Controller
+                name="cityId"
+                control={control}
+                rules={{ required: 'المدينة مطلوبة' }}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger dir="rtl" className="w-full">
+                      <SelectValue placeholder="اختر المدينة" />
+                    </SelectTrigger>
+                    <SelectContent dir="rtl">
+                      {cities.map((city) => (
+                        <SelectItem key={city.id} value={city.id} className="text-right">
+                          {city.nameAr}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.cityId && <span className="text-red-500 text-sm">{errors.cityId.message}</span>}
+            </div>
 
-          <div className="space-y-2">
-            <Label className="text-right block">المدينة <span className="text-red-500">*</span></Label>
-            <Controller
-              name="cityId"
-              control={control}
-              rules={{ required: 'المدينة مطلوبة' }}
-              render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <SelectTrigger dir="rtl" className="w-full">
-                    <SelectValue placeholder="اختر المدينة" />
-                  </SelectTrigger>
-                  <SelectContent dir="rtl">
-                    {cities.map((city) => (
-                      <SelectItem key={city.id} value={city.id} className="text-right">
-                        {city.nameAr}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {errors.cityId && <span className="text-red-500 text-sm">{errors.cityId.message}</span>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-right block">سعر التكلفة</Label>
               <Input
@@ -205,6 +209,42 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
                 )}
               />
             </div>
+          </div>
+
+          {/* Separator */}
+          <div className="border-t pt-4">
+            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+              📝 وصف الخدمة
+              <span className="text-xs font-normal text-gray-400">(يظهر في عروض الأسعار)</span>
+            </h4>
+          </div>
+
+          {/* Description Arabic */}
+          <div className="space-y-2">
+            <Label className="text-right block">
+              الوصف بالعربي
+              <span className="text-xs text-amber-600 mr-2">(يظهر للعملاء في العروض العربية)</span>
+            </Label>
+            <textarea
+              {...register('descriptionAr')}
+              placeholder="بعد تناول الافطار في الفندق ننطلق في رحلتنا ونبدأ بزيارة..."
+              className="w-full min-h-[120px] p-3 border rounded-md text-right resize-y text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              dir="rtl"
+            />
+          </div>
+
+          {/* Description English */}
+          <div className="space-y-2">
+            <Label className="text-right block">
+              الوصف بالإنجليزي
+              <span className="text-xs text-amber-600 mr-2">(يظهر في الفاتورة في الانجليزية)</span>
+            </Label>
+            <textarea
+              {...register('descriptionEn')}
+              placeholder="After breakfast at the hotel, we start our trip by visiting..."
+              className="w-full min-h-[120px] p-3 border rounded-md text-left resize-y text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              dir="ltr"
+            />
           </div>
 
           <DialogFooter className="gap-2 justify-end sm:justify-end mt-4">

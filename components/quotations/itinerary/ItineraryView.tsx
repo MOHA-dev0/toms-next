@@ -252,9 +252,10 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
                                 </div>
                               </td>
                               <td className="py-3.5 px-3 text-slate-600 text-[13px] text-center border-l border-slate-100">{fmt(s.serviceDate)}</td>
-                              <td className="py-3.5 px-3 text-sm">
-                                <div className="font-bold text-slate-800">{s.nameAr || s.service?.nameAr}</div>
-                                {s.descriptionAr && <div className="text-xs text-slate-400 mt-0.5">{s.descriptionAr}</div>}
+                              <td className="py-3.5 px-3 text-sm text-right align-top">
+                                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                  {s.descriptionAr || s.service?.descriptionAr || s.nameAr || s.service?.nameAr}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -276,8 +277,9 @@ export default function ItineraryView({ quotation }: { quotation: any }) {
                   <div key={idx} className="no-break flex gap-2.5 mb-2">
                     <span className="text-slate-400 mt-0.5">●</span>
                     <div>
-                      <div className="font-bold">{s.nameAr}</div>
-                      {s.descriptionAr && <div className="text-xs text-slate-500">{s.descriptionAr}</div>}
+                      <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-slate-800">
+                        {s.descriptionAr || s.nameAr}
+                      </div>
                     </div>
                   </div>
                 ))}
