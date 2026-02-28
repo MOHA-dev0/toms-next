@@ -128,7 +128,7 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-right text-lg font-bold">
             {initialData ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}

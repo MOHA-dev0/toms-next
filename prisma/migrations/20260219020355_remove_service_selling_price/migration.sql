@@ -346,7 +346,7 @@ CREATE TABLE `payments` (
     `customer_id` VARCHAR(191) NULL,
     `amount` DECIMAL(12, 2) NOT NULL,
     `payment_method` VARCHAR(191) NOT NULL DEFAULT 'نقدي',
-    `payment_date` DATE NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `payment_date` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `notes` TEXT NULL,
     `created_by` VARCHAR(191) NULL,
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

@@ -107,7 +107,7 @@ export async function POST(req: Request) {
           companyId: data.company || null,
           source: data.channel === 'b2b' ? 'b2b' : 'b2c',
           destinationCityId: validDestinationIds[0] || null, // Keep for backward compatibility
-          destinations: {
+          cities_quotationdestinations: {
             connect: validDestinationIds.map((id: string) => ({ id })),
           },
           notes: data.notes || null,

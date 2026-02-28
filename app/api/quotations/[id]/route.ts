@@ -19,7 +19,7 @@ export async function GET(
       include: {
         customer: true,
         destinationCity: true,
-        destinations: true,
+        cities_quotationdestinations: true,
         agent: true,
         quotationHotels: {
           include: {

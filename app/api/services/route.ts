@@ -6,12 +6,12 @@ import { z } from 'zod';
 // Schema for validation
 const serviceSchema = z.object({
   nameAr: z.string().min(1, 'Name (Arabic) is required'),
-  nameEn: z.string().optional(),
+  nameEn: z.string().nullish(),
   cityId: z.string().min(1, 'City is required'),
-  purchasePrice: z.number().min(0).default(0),
+  purchasePrice: z.coerce.number().min(0).default(0),
   currency: z.enum(['USD', 'EUR', 'TRY', 'SAR', 'AED', 'GBP']).default('USD'),
-  descriptionAr: z.string().optional(),
-  descriptionEn: z.string().optional(),
+  descriptionAr: z.string().nullish(),
+  descriptionEn: z.string().nullish(),
 });
 
 export async function GET() {

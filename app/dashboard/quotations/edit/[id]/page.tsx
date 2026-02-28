@@ -50,8 +50,8 @@ export default function EditQuotationPage() {
             referenceNumber: data.referenceNumber,
             quotationId: data.id,
             companyId: data.companyId || undefined,
-            destinationCityIds: data.destinations?.length > 0 
-              ? data.destinations.map((d: any) => d.id) 
+            destinationCityIds: data.cities_quotationdestinations?.length > 0 
+              ? data.cities_quotationdestinations.map((d: any) => d.id) 
               : (data.destinationCityId ? [data.destinationCityId] : []),
             startDate: parsedStartDate,
             endDate: parsedEndDate,

@@ -69,18 +69,18 @@ model Employee {
 }
 
 model City {
-  id                   String               @id @default(uuid())
-  nameAr               String               @map("name_ar")
-  nameTr               String?              @map("name_tr")
-  countryAr            String               @default("تركيا") @map("country_ar")
-  countryTr            String?              @default("Türkiye") @map("country_tr")
-  isActive             Boolean              @default(true) @map("is_active")
-  createdAt            DateTime             @default(now()) @map("created_at")
-  hotels               Hotel[]
-  quotationItineraries QuotationItinerary[]
-  quotations           Quotation[]
-  quotationsAsDestination Quotation[] @relation("QuotationDestinations")
-  services             Service[]
+  id                               String               @id @default(uuid())
+  nameAr                           String               @map("name_ar")
+  nameTr                           String?              @map("name_tr")
+  countryAr                        String               @default("تركيا") @map("country_ar")
+  countryTr                        String?              @default("Türkiye") @map("country_tr")
+  isActive                         Boolean              @default(true) @map("is_active")
+  createdAt                        DateTime             @default(now()) @map("created_at")
+  hotels                           Hotel[]
+  quotationItineraries             QuotationItinerary[]
+  quotations                       Quotation[]
+  services                         Service[]
+  quotations_quotationdestinations Quotation[]          @relation("quotationdestinations")
 
   @@map("cities")
 }
@@ -152,11 +152,11 @@ model Service {
   nameAr            String             @map("name_ar")
   nameEn            String?            @map("name_en")
   descriptionAr     String?            @map("description_ar") @db.Text
-  descriptionEn     String?            @map("description_en") @db.Text
   purchasePrice     Decimal            @default(0.00) @map("purchase_price") @db.Decimal(10, 2)
   currency          Currency           @default(USD)
   isActive          Boolean            @default(true) @map("is_active")
   createdAt         DateTime           @default(now()) @map("created_at")
+  descriptionEn     String?            @map("description_en") @db.Text
   quotationServices QuotationService[]
   city              City               @relation(fields: [cityId], references: [id], onDelete: Cascade)
 
@@ -209,42 +209,42 @@ model Customer {
 }
 
 model Quotation {
-  id                   String               @id @default(uuid())
-  referenceNumber      String               @unique @map("reference_number")
-  customerId           String               @map("customer_id")
-  salesEmployeeId      String               @map("sales_employee_id")
-  agentId              String?              @map("agent_id")
-  companyId            String?              @map("company_id")
-  source               SourceType           @default(b2c)
-  destinationCityId    String?              @map("destination_city_id")
-  status               QuotationStatus      @default(draft)
-  startDate            DateTime             @map("start_date") @db.Date
-  endDate              DateTime             @map("end_date") @db.Date
-  adults               Int                  @default(1)
-  children             Int                  @default(0)
-  infants              Int                  @default(0)
-  subtotal             Decimal              @default(0.00) @map("subtotal") @db.Decimal(12, 2)
-  commissionAmount     Decimal              @default(0.00) @map("commission_amount") @db.Decimal(12, 2)
-  totalPrice           Decimal              @default(0.00) @map("total_price") @db.Decimal(12, 2)
-  profit               Decimal              @default(0.00) @map("profit") @db.Decimal(12, 2)
-  notes                String?              @db.Text
-  createdAt            DateTime             @default(now()) @map("created_at")
-  updatedAt            DateTime             @updatedAt @map("updated_at")
-  paidAmount           Decimal              @default(0.00) @map("paid_amount") @db.Decimal(12, 2)
-  bookings             Booking[]
-  payments             Payment[]
-  quotationCars        QuotationCar[]
-  quotationFlights     QuotationFlight[]
-  quotationHotels      QuotationHotel[]
-  quotationItineraries QuotationItinerary[]
-  passengers           QuotationPassenger[]
-  quotationServices    QuotationService[]
-  agent                Agent?               @relation(fields: [agentId], references: [id])
-  company              Company?             @relation(fields: [companyId], references: [id])
-  customer             Customer             @relation(fields: [customerId], references: [id])
-  destinationCity      City?                @relation(fields: [destinationCityId], references: [id])
-  destinations         City[]               @relation("QuotationDestinations")
-  salesEmployee        Employee             @relation("SalesEmployee", fields: [salesEmployeeId], references: [id])
+  id                           String               @id @default(uuid())
+  referenceNumber              String               @unique @map("reference_number")
+  customerId                   String               @map("customer_id")
+  salesEmployeeId              String               @map("sales_employee_id")
+  agentId                      String?              @map("agent_id")
+  source                       SourceType           @default(b2c)
+  destinationCityId            String?              @map("destination_city_id")
+  status                       QuotationStatus      @default(draft)
+  startDate                    DateTime             @map("start_date") @db.Date
+  endDate                      DateTime             @map("end_date") @db.Date
+  adults                       Int                  @default(1)
+  children                     Int                  @default(0)
+  infants                      Int                  @default(0)
+  subtotal                     Decimal              @default(0.00) @map("subtotal") @db.Decimal(12, 2)
+  commissionAmount             Decimal              @default(0.00) @map("commission_amount") @db.Decimal(12, 2)
+  totalPrice                   Decimal              @default(0.00) @map("total_price") @db.Decimal(12, 2)
+  profit                       Decimal              @default(0.00) @map("profit") @db.Decimal(12, 2)
+  notes                        String?              @db.Text
+  createdAt                    DateTime             @default(now()) @map("created_at")
+  updatedAt                    DateTime             @updatedAt @map("updated_at")
+  paidAmount                   Decimal              @default(0.00) @map("paid_amount") @db.Decimal(12, 2)
+  companyId                    String?              @map("company_id")
+  bookings                     Booking[]
+  payments                     Payment[]
+  quotationCars                QuotationCar[]
+  quotationFlights             QuotationFlight[]
+  quotationHotels              QuotationHotel[]
+  quotationItineraries         QuotationItinerary[]
+  passengers                   QuotationPassenger[]
+  quotationServices            QuotationService[]
+  agent                        Agent?               @relation(fields: [agentId], references: [id])
+  company                      Company?             @relation(fields: [companyId], references: [id])
+  customer                     Customer             @relation(fields: [customerId], references: [id])
+  destinationCity              City?                @relation(fields: [destinationCityId], references: [id])
+  salesEmployee                Employee             @relation("SalesEmployee", fields: [salesEmployeeId], references: [id])
+  cities_quotationdestinations City[]               @relation("quotationdestinations")
 
   @@index([agentId], map: "quotations_agent_id_fkey")
   @@index([companyId], map: "quotations_company_id_fkey")
@@ -291,12 +291,12 @@ model QuotationService {
   serviceId     String?   @map("service_id")
   nameAr        String    @map("name_ar")
   descriptionAr String?   @map("description_ar") @db.Text
-  descriptionEn String?   @map("description_en") @db.Text
   quantity      Int       @default(1)
   purchasePrice Decimal   @map("purchase_price") @db.Decimal(10, 2)
   sellingPrice  Decimal   @map("selling_price") @db.Decimal(10, 2)
   serviceDate   DateTime? @map("service_date") @db.Date
   createdAt     DateTime  @default(now()) @map("created_at")
+  descriptionEn String?   @map("description_en") @db.Text
   quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   service       Service?  @relation(fields: [serviceId], references: [id])
 
@@ -453,10 +453,10 @@ model GlobalRoomType {
 }
 
 model Company {
-  id        String   @id @default(uuid())
-  nameEn    String   @map("name_en")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String      @id @default(uuid())
+  nameEn     String      @map("name_en")
+  isActive   Boolean     @default(true) @map("is_active")
+  createdAt  DateTime    @default(now()) @map("created_at")
   quotations Quotation[]
 
   @@map("companies")

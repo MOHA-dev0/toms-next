@@ -159,7 +159,7 @@ export async function getQuotations(options?: {
       include: {
         customer: true,
         destinationCity: true,
-        destinations: true, // Fetch multiple destinations if mapped
+        cities_quotationdestinations: true, // Fetch multiple destinations if mapped
         agent: true,
       },
       orderBy: [
@@ -185,8 +185,8 @@ export async function getQuotations(options?: {
       referenceNumber: q.referenceNumber,
       customerName: (q as any).customer?.nameAr || 'غير محدد',
       agentName: (q as any).agent?.nameEn || '',
-      destination: (q as any).destinations?.length > 0 
-        ? (q as any).destinations.map((d: any) => d.nameAr).join(' - ') 
+      destination: (q as any).cities_quotationdestinations?.length > 0 
+        ? (q as any).cities_quotationdestinations.map((d: any) => d.nameAr).join(' - ') 
         : ((q as any).destinationCity?.nameAr || 'غير محدد'),
       paxCount: (q.adults || 0) + (q.children || 0) + (q.infants || 0),
       totalPrice: q.totalPrice ? Number(q.totalPrice.toString()) : 0,
@@ -319,7 +319,7 @@ export async function finalizeQuotation(quotationId: string, data: {
         children: state.basicInfo.children,
         infants: state.basicInfo.infants,
         destinationCityId: state.basicInfo.destinationCityIds?.[0] || null, // Keep for backward compatibility
-        destinations: {
+        cities_quotationdestinations: {
           set: (state.basicInfo.destinationCityIds || []).filter((id: string) => id && id.length === 36).map((id: string) => ({ id }))
         },
         source: state.basicInfo.channel || 'b2c',
