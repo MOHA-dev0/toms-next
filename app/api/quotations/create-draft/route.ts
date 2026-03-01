@@ -121,6 +121,7 @@ export async function POST(req: Request) {
             create: data.passengers.map((p, index) => ({
               name: p.name || '',
               type: p.type || 'adult',
+              age: p.age ?? null,
               createdAt: new Date(Date.now() + index * 1000),
             })),
           },

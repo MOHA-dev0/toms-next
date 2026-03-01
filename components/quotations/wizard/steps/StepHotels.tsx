@@ -232,15 +232,10 @@ export default function StepHotels() {
       const hotel = cityHotels.find(h => h.id === currentHotelId);
       const room = hotel?.roomTypes.find((r: any) => r.id === currentRoomId);
 
-      const pricing = room?.roomPricing.find((p: any) => {
+      const pricing = room?.roomPricing?.find((p: any) => {
         const validFrom = normalizeDate(p.validFrom);
         const validTo = normalizeDate(p.validTo);
-        return (
-          p.usage === currentUsage &&
-          p.board === currentBoard &&
-          validFrom <= checkInDate &&
-          validTo >= checkInDate
-        );
+        return validFrom <= checkInDate && validTo >= checkInDate;
       });
 
       if (pricing) {

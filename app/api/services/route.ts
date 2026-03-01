@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
         return NextResponse.json({ error: error.issues }, { status: 400 });
     }
+    console.error('Error creating service:', error);
     return NextResponse.json({ error: 'Error creating service' }, { status: 500 });
   }
 }

@@ -21,6 +21,14 @@ import { Plus, Trash2 } from 'lucide-react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import api from '@/lib/api-client';
 import { toast } from 'sonner';
+import { DatePicker } from '@/components/ui/date-picker';
+
+interface RoomPricingField {
+  id?: string;
+  validFrom: string;
+  validTo: string;
+  price: string;
+}
 
 interface RoomTypeField {
   id?: string;
@@ -30,6 +38,7 @@ interface RoomTypeField {
   currency: string;
   basePrice?: string | number;
   imageUrl: string;
+  pricings?: RoomPricingField[];
 }
 
 interface HotelFormValues {
@@ -45,6 +54,88 @@ interface HotelFormProps {
   onSuccess?: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+}
+
+const parseDateString = (dateStr?: string) => {
+  if (!dateStr) return undefined;
+  const str = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const parts = str.split('-');
+  if (parts.length !== 3) return undefined;
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+};
+
+const formatDateString = (date?: Date) => {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const RoomTypePricings = ({ control, index, register }: any) => {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `roomTypes.${index}.pricings`
+  });
+
+  return (
+    <div className="col-span-12 mt-2 px-4 py-3 bg-muted/40 rounded-lg border border-dashed border-gray-300">
+      <div className="flex justify-between items-center mb-3">
+        <label className="text-sm font-semibold text-gray-700">أسعار مخصصة حسب التاريخ (اختياري)</label>
+        <Button type="button" variant="outline" size="sm" onClick={() => append({ validFrom: '', validTo: '', price: '' })} className="h-7 text-xs">
+          + إضافة فترة
+        </Button>
+      </div>
+      {fields.map((field, pIndex) => (
+        <div key={field.id} className="grid grid-cols-12 gap-3 items-center mb-2 animate-in slide-in-from-top-1">
+          <div className="col-span-4">
+            <Label className="text-xs mb-1 block text-muted-foreground">من تاريخ</Label>
+            <Controller
+              control={control}
+              name={`roomTypes.${index}.pricings.${pIndex}.validFrom`}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <div className="w-full">
+                  <DatePicker 
+                    date={parseDateString(field.value)} 
+                    setDate={(date) => field.onChange(formatDateString(date))} 
+                  />
+                </div>
+              )}
+            />
+          </div>
+          <div className="col-span-4">
+            <Label className="text-xs mb-1 block text-muted-foreground">إلى تاريخ</Label>
+            <Controller
+              control={control}
+              name={`roomTypes.${index}.pricings.${pIndex}.validTo`}
+              rules={{ required: true }}
+              render={({ field }) => (
+                <div className="w-full">
+                  <DatePicker 
+                    date={parseDateString(field.value)} 
+                    setDate={(date) => field.onChange(formatDateString(date))} 
+                  />
+                </div>
+              )}
+            />
+          </div>
+          <div className="col-span-3">
+            <Label className="text-xs mb-1 block text-muted-foreground">السعر المخصص</Label>
+            <Input type="number" step="0.01" className="h-8 text-sm" placeholder="السعر" {...register(`roomTypes.${index}.pricings.${pIndex}.price`, { required: true })} />
+          </div>
+          <div className="col-span-1 flex items-end pb-0.5 justify-end">
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => remove(pIndex)}>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      {fields.length === 0 && (
+        <p className="text-xs text-muted-foreground text-center py-2">لم يتم إضافة فترات مخصصة. سيتم تطبيق السعر الافتراضي للإقامة.</p>
+      )}
+    </div>
+  )
 }
 
 export function HotelForm({ cities, triggerButton, initialData, onSuccess, open: controlledOpen, onOpenChange }: HotelFormProps) {
@@ -77,7 +168,7 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
     defaultValues: {
       nameAr: '',
       cityId: '',
-      roomTypes: [{ nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '' }]
+      roomTypes: [{ nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '', pricings: [] }]
     }
   });
 
@@ -93,14 +184,20 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
           board: rt.board || 'bb',
           price: String(rt.basePrice || rt.price || '0'),
           currency: rt.currency || 'USD',
-          imageUrl: rt.imageUrl || ''
+          imageUrl: rt.imageUrl || '',
+          pricings: (rt as any).roomPricing?.map((p: any) => ({
+            id: p.id,
+            validFrom: new Date(p.validFrom).toISOString().split('T')[0],
+            validTo: new Date(p.validTo).toISOString().split('T')[0],
+            price: String(p.purchasePrice || p.sellingPrice || '0')
+          })) || []
         }))
       });
     } else if (open && !initialData) {
       reset({
         nameAr: '',
         cityId: '',
-        roomTypes: [{ nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '' }]
+        roomTypes: [{ nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '', pricings: [] }]
       });
     }
   }, [open, initialData, reset]);
@@ -134,6 +231,45 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
   });
 
   const onSubmit = (data: HotelFormValues) => {
+    // Validate pricings
+    for (let i = 0; i < data.roomTypes.length; i++) {
+      const rt = data.roomTypes[i];
+      const nameObj = rt.nameAr || `الغرفة ${i + 1}`;
+      if (rt.pricings && rt.pricings.length > 0) {
+        let hasError = false;
+        for (let j = 0; j < rt.pricings.length; j++) {
+          const p = rt.pricings[j];
+          if (!p.validFrom || !p.validTo || !p.price) {
+            toast.error(`الرجاء إكمال جميع حقول الأسعار للغرفة: ${nameObj}`);
+            hasError = true;
+            break;
+          }
+          if (new Date(p.validFrom) > new Date(p.validTo)) {
+            toast.error(`تاريخ البداية يجب أن يكون قبل تاريخ النهاية في الغرفة: ${nameObj}`);
+            hasError = true;
+            break;
+          }
+        }
+        if (hasError) return;
+
+        // Check overlaps
+        for (let j = 0; j < rt.pricings.length; j++) {
+          for (let k = j + 1; k < rt.pricings.length; k++) {
+            const startA = new Date(rt.pricings[j].validFrom).getTime();
+            const endA = new Date(rt.pricings[j].validTo).getTime();
+            const startB = new Date(rt.pricings[k].validFrom).getTime();
+            const endB = new Date(rt.pricings[k].validTo).getTime();
+            if (startA <= endB && startB <= endA) {
+              toast.error(`يوجد تداخل في تواريخ الأسعار للغرفة: ${nameObj}`);
+              hasError = true;
+              break;
+            }
+          }
+          if (hasError) break;
+        }
+        if (hasError) return;
+      }
+    }
     mutation.mutate(data);
   };
 
@@ -202,7 +338,7 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ id: undefined, nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '' })}
+                onClick={() => append({ id: undefined, nameAr: '', board: 'bb', price: '', currency: 'USD', imageUrl: '', pricings: [] })}
                 className="gap-2"
               >
                 <Plus className="w-4 h-4" />
@@ -326,6 +462,9 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
+
+                    {/* Room Type Pricings */}
+                    <RoomTypePricings control={control} index={index} register={register} />
                   </div>
                 ))}
               </div>

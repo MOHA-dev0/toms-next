@@ -1,12 +1,44 @@
 import prisma from '@/lib/prisma'
 import { Hotel, Prisma } from '@prisma/client'
 
+export function validateRoomTypes(roomTypes: any[]) {
+  if (!roomTypes) return;
+  for (let i = 0; i < roomTypes.length; i++) {
+    const rt = roomTypes[i];
+    const nameObj = rt.nameAr || `Room ${i + 1}`;
+    if (rt.pricings && rt.pricings.length > 0) {
+      for (let j = 0; j < rt.pricings.length; j++) {
+        const p = rt.pricings[j];
+        if (!p.validFrom || !p.validTo || p.price == null) {
+          throw new Error(`الرجاء إكمال جميع حقول الأسعار للغرفة: ${nameObj}`);
+        }
+        if (new Date(p.validFrom) > new Date(p.validTo)) {
+          throw new Error(`تاريخ البداية يجب أن يكون قبل تاريخ النهاية في الغرفة: ${nameObj}`);
+        }
+      }
+      for (let j = 0; j < rt.pricings.length; j++) {
+        for (let k = j + 1; k < rt.pricings.length; k++) {
+          const startA = new Date(rt.pricings[j].validFrom).getTime();
+          const endA = new Date(rt.pricings[j].validTo).getTime();
+          const startB = new Date(rt.pricings[k].validFrom).getTime();
+          const endB = new Date(rt.pricings[k].validTo).getTime();
+          if (startA <= endB && startB <= endA) {
+            throw new Error(`يوجد تداخل في تواريخ الأسعار للغرفة: ${nameObj}`);
+          }
+        }
+      }
+    }
+  }
+}
+
 export const hotelService = {
   async getAll() {
     return await prisma.hotel.findMany({
       include: {
         city: true,
-        roomTypes: true,
+        roomTypes: {
+          include: { roomPricing: true }
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -17,7 +49,9 @@ export const hotelService = {
       where: { id },
       include: {
         city: true,
-        roomTypes: true,
+        roomTypes: {
+          include: { roomPricing: true }
+        },
       },
     })
   },
@@ -31,8 +65,14 @@ export const hotelService = {
       price: number
       currency: string
       imageUrl?: string
+      pricings?: {
+        validFrom: string
+        validTo: string
+        price: number
+      }[]
     }[]
   }) {
+    validateRoomTypes(data.roomTypes);
     return await prisma.hotel.create({
       data: {
         nameAr: data.nameAr,
@@ -49,7 +89,9 @@ export const hotelService = {
       },
       include: {
         city: true,
-        roomTypes: true,
+        roomTypes: {
+          include: { roomPricing: true }
+        },
       },
     })
   },
@@ -66,9 +108,18 @@ export const hotelService = {
         price: number
         currency: string
         imageUrl?: string
+        pricings?: {
+          validFrom: string
+          validTo: string
+          price: number
+        }[]
       }[]
     }
   ) {
+    if (data.roomTypes) {
+      validateRoomTypes(data.roomTypes);
+    }
+    
     // For room types, simplest approach for now is delete all and recreate, 
     // BUT that destroys history/relations if any.
     // Better: upsert/update/delete logic. 
@@ -124,6 +175,10 @@ export const hotelService = {
         // 2. Update existing or Create new
         for (const rt of data.roomTypes) {
           if (rt.id) {
+            await tx.roomPricing.deleteMany({
+              where: { roomTypeId: rt.id }
+            });
+
             await tx.roomType.update({
               where: { id: rt.id },
               data: {
@@ -132,10 +187,21 @@ export const hotelService = {
                 basePrice: rt.price,
                 currency: rt.currency as any,
                 imageUrl: rt.imageUrl,
+                roomPricing: rt.pricings && rt.pricings.length > 0 ? {
+                  create: rt.pricings.map(p => ({
+                    usage: "dbl",
+                    board: rt.board as any,
+                    purchasePrice: p.price,
+                    sellingPrice: p.price,
+                    currency: rt.currency as any,
+                    validFrom: new Date(p.validFrom),
+                    validTo: new Date(p.validTo)
+                  }))
+                } : undefined
               },
             })
           } else {
-            await tx.roomType.create({
+              await tx.roomType.create({
               data: {
                 hotelId: id,
                 nameAr: rt.nameAr,
@@ -143,6 +209,17 @@ export const hotelService = {
                 basePrice: rt.price,
                 currency: rt.currency as any,
                 imageUrl: rt.imageUrl,
+                roomPricing: rt.pricings && rt.pricings.length > 0 ? {
+                  create: rt.pricings.map(p => ({
+                    usage: "dbl",
+                    board: rt.board as any,
+                    purchasePrice: p.price,
+                    sellingPrice: p.price,
+                    currency: rt.currency as any,
+                    validFrom: new Date(p.validFrom),
+                    validTo: new Date(p.validTo)
+                  }))
+                } : undefined
               },
             })
           }

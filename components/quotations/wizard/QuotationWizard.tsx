@@ -52,7 +52,8 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
         infants: basicInfo.infants,
         passengers: basicInfo.passengers.map(p => ({
           name: p.name,
-          type: p.type
+          type: p.type,
+          age: p.age
         })),
         notes: basicInfo.notes,
       };

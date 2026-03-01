@@ -92,7 +92,7 @@ export function ServiceForm({ cities, triggerButton, initialData, onSuccess, ope
     mutationFn: async (data: ServiceFormValues) => {
       const payload = {
         ...data,
-        purchasePrice: parseFloat(data.purchasePrice),
+        purchasePrice: data.purchasePrice ? parseFloat(data.purchasePrice) : 0,
         sellingPrice: 0
       };
       

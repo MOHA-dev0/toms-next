@@ -59,6 +59,7 @@ export const createDraftQuotationSchema = z.object({
       z.object({
         name: z.string().default(""),
         type: z.enum(["adult", "child", "infant"]).default("adult"),
+        age: z.number().int().optional(),
       })
     )
     .min(1, "يجب إضافة مسافر واحد على الأقل")
@@ -72,6 +73,11 @@ export const createDraftQuotationSchema = z.object({
         );
       },
       "اسم المسافر الرئيسي مطلوب"
+    )
+    .refine(
+      (passengers) =>
+        passengers.every((p) => p.type !== "child" || (p.age !== undefined && p.age !== null)),
+      "عمر الطفل مطلوب (Child age is required)"
     ),
 
   // ── Notes (optional) ──────────────────────────────────────

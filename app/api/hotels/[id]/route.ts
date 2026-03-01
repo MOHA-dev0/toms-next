@@ -12,6 +12,10 @@ export async function PUT(
     const formatedRoomTypes = body.roomTypes?.map((rt: any) => ({
       ...rt,
       price: parseFloat(rt.price) || 0,
+      pricings: rt.pricings?.map((p: any) => ({
+        ...p,
+        price: parseFloat(p.price) || 0,
+      })) || []
     })) || []
 
     const hotel = await hotelService.update(id, {
@@ -19,8 +23,11 @@ export async function PUT(
       roomTypes: formatedRoomTypes,
     })
     return NextResponse.json(hotel)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating hotel:', error)
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Error updating hotel' }, { status: 500 })
   }
 }

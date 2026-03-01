@@ -26,25 +26,24 @@ export default function StepServices() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Initialize services based on stay duration if empty (CREATE mode only)
+  // Initialize services based on stay duration if empty or if days are missing
   useEffect(() => {
-    // Check LIVE state to avoid strict mode double-mount issues
-    const liveState = useQuotationStore.getState();
+    if (!basicInfo.startDate || !basicInfo.nights || basicInfo.nights <= 0) return;
+
+    // We check the store synchronously
+    const currentServices = useQuotationStore.getState().itineraryServices;
+    const existingDays = new Set(currentServices.map(s => s.dayNumber));
+    const startDate = new Date(basicInfo.startDate);
     
-    // In edit mode (quotationId exists), services are loaded from DB — never auto-create
-    if (liveState.basicInfo.quotationId) return;
-    
-    const currentServices = liveState.itineraryServices;
-    
-    if (currentServices.length === 0 && basicInfo.startDate && basicInfo.nights && basicInfo.nights > 0) {
-      const startDate = new Date(basicInfo.startDate);
-      
-      for (let i = 0; i < basicInfo.nights; i++) {
-        const currentDate = addDays(startDate, i);
+    let missingDays = false;
+    for (let i = 0; i < basicInfo.nights; i++) {
+      const dayNum = i + 1;
+      if (!existingDays.has(dayNum)) {
+        missingDays = true;
         addService({
           id: crypto.randomUUID(),
-          dayNumber: i + 1,
-          date: currentDate,
+          dayNumber: dayNum,
+          date: addDays(startDate, i),
           serviceId: "",
           name: "",
           quantity: 1, // Default Days = 1
@@ -54,7 +53,7 @@ export default function StepServices() {
         }, 'itinerary');
       }
     }
-  }, [basicInfo.startDate, basicInfo.nights, addService]);
+  }, [basicInfo.startDate, basicInfo.nights, itineraryServices.length, addService]);
 
   const handleServiceSelect = (serviceId: string, itemId: string) => {
     console.log("Selecting service:", serviceId);

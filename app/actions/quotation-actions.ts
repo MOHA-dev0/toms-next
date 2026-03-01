@@ -242,7 +242,7 @@ export async function finalizeQuotation(quotationId: string, data: {
     let isUnique = false;
 
     while (!isUnique) {
-      randomNum = Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
+      randomNum = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
       finalReferenceNumber = `${empInitial}-${currentYear}-${randomNum}`;
       const exists = await prisma.quotation.findUnique({ where: { referenceNumber: finalReferenceNumber } });
       if (!exists) isUnique = true;
@@ -256,6 +256,11 @@ export async function finalizeQuotation(quotationId: string, data: {
       });
     }
   }
+
+  // Load existing hotels to preserve prices if unmodified
+  const existingQuotationHotels = await prisma.quotationHotel.findMany({
+    where: { quotationId }
+  });
 
   // Clean existing relations first just in case to avoid duplicates if re-submitted later
   // Ideally this would be a transaction but Prisma `update` doesn't support nested deleteMany for all without specific queries
@@ -302,6 +307,93 @@ export async function finalizeQuotation(quotationId: string, data: {
     return new Date(str);
   }
 
+  let quotationHotelsCreateData: any[] = [];
+  if (state?.hotelSegments) {
+    for (const h of state.hotelSegments) {
+        const checkInDate = toSafeDate(h.checkIn) || new Date();
+        const checkOutDate = toSafeDate(h.checkOut) || new Date();
+        const nightsCount = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+        
+        let calculatedSellingPrice = h.sellingPrice || 0;
+        let pPrice = h.purchasePrice || 0;
+        let originalPri = h.originalPrice;
+        let originalCurr = h.originalCurrency;
+
+        // Try to find if this is an unmodified hotel segment from before
+        const matchedOldHotel = existingQuotationHotels.find(old => 
+          old.hotelId === h.hotelId && 
+          old.roomTypeId === h.roomTypeId && 
+          old.checkIn.getTime() === checkInDate.getTime() && 
+          old.checkOut.getTime() === checkOutDate.getTime() &&
+          old.usage === (h.usage || 'dbl') &&
+          old.board === (h.boardType || 'bb')
+        );
+
+        if (matchedOldHotel) {
+          // Preserve exactly
+          pPrice = Number(matchedOldHotel.purchasePrice);
+          calculatedSellingPrice = Number(matchedOldHotel.sellingPrice);
+          originalPri = matchedOldHotel.originalPrice ? Number(matchedOldHotel.originalPrice) : undefined;
+          originalCurr = matchedOldHotel.originalCurrency;
+        } else if (h.roomTypeId) {
+          const roomTypeData = await prisma.roomType.findUnique({
+            where: { id: h.roomTypeId },
+            include: { roomPricing: true }
+          });
+          
+          if (roomTypeData) {
+            // Find applicable pricing based on date
+            const pricing = roomTypeData.roomPricing.find(p => {
+              const start = new Date(p.validFrom);
+              start.setHours(0,0,0,0);
+              const end = new Date(p.validTo);
+              end.setHours(0,0,0,0);
+              const checkInMatch = new Date(checkInDate);
+              checkInMatch.setHours(0,0,0,0);
+              return start <= checkInMatch && end >= checkInMatch;
+            });
+
+            const dbPrice = pricing ? Number(pricing.sellingPrice) : Number(roomTypeData.basePrice || 0);
+            const dbCurrency = pricing ? pricing.currency : (roomTypeData.currency || 'USD');
+
+            // Set original tracking explicitly from DB values
+            pPrice = dbPrice;
+            originalPri = dbPrice;
+            originalCurr = dbCurrency;
+
+            // Apply exchange rate if they sent it to us and the currency is valid
+            if (dbCurrency === 'USD') {
+              calculatedSellingPrice = dbPrice;
+            } else if (h.exchangeRate && h.exchangeRate > 0) {
+              calculatedSellingPrice = Math.round(dbPrice * h.exchangeRate * 100) / 100;
+            } else {
+              // If no exchange rate but different currency, use db price directly to avoid 0
+              calculatedSellingPrice = dbPrice;
+            }
+          }
+        }
+
+        quotationHotelsCreateData.push({
+          hotelId: h.hotelId,
+          roomTypeId: h.roomTypeId,
+          checkIn: checkInDate,
+          checkOut: checkOutDate,
+          nights: nightsCount,
+          roomsCount: h.roomsCount || 1,
+          usage: h.usage || 'dbl',
+          board: h.boardType || 'bb',
+          purchasePrice: pPrice,
+          sellingPrice: calculatedSellingPrice,
+          notes: h.notes || null,
+          ...(originalPri ? {
+            originalPrice: originalPri,
+            originalCurrency: originalCurr || null,
+            exchangeRate: h.exchangeRate || null,
+          } : {}),
+        });
+    }
+  }
+
   await prisma.quotation.update({
     
     where: { id: quotationId },
@@ -336,6 +428,7 @@ export async function finalizeQuotation(quotationId: string, data: {
             name: p.name || '',
             type: p.type || 'adult',
             passport: p.passport || null,
+            age: p.age ?? null,
             createdAt: new Date(Date.now() + index * 1000)
           }))
         }
@@ -343,31 +436,7 @@ export async function finalizeQuotation(quotationId: string, data: {
 
       ...(state && {
         quotationHotels: {
-          create: state.hotelSegments?.map((h: any) => {
-            const checkInDate = toSafeDate(h.checkIn) || new Date();
-            const checkOutDate = toSafeDate(h.checkOut) || new Date();
-            const nightsCount = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
-            
-            return {
-              hotelId: h.hotelId,
-              roomTypeId: h.roomTypeId,
-              checkIn: checkInDate,
-              checkOut: checkOutDate,
-              nights: nightsCount,
-              roomsCount: h.roomsCount || 1,
-              usage: h.usage || 'dbl',
-              board: h.boardType || 'bb',
-              purchasePrice: h.purchasePrice || 0,
-              sellingPrice: h.sellingPrice || 0, // Always USD (converted at selection time)
-              notes: h.notes || null,
-              // Audit trail: original currency info (if converted from non-USD)
-              ...(h.originalPrice ? {
-                originalPrice: h.originalPrice,
-                originalCurrency: h.originalCurrency || null,
-                exchangeRate: h.exchangeRate || null,
-              } : {}),
-            };
-          }) || []
+          create: quotationHotelsCreateData
         },
         quotationFlights: {
           create: state.isFlightsEnabled ? (state.flights?.map((f: any) => ({

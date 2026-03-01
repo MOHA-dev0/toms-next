@@ -315,13 +315,31 @@ export default function StepBasicInfo({ validationErrors = {} }: StepBasicInfoPr
                <select
                  className="w-full h-10 p-2 border border-gray-300 rounded-md text-right bg-white"
                  value={passenger.type}
-                 onChange={(e) => updatePassenger(passenger.id, { type: e.target.value as any })}
+                 onChange={(e) => updatePassenger(passenger.id, { 
+                   type: e.target.value as any,
+                   ...(e.target.value !== 'child' ? { age: undefined } : {})
+                 })}
                >
                  <option value="adult">بالغ</option>
                  <option value="child">طفل</option>
                  <option value="infant">رضيع</option>
                </select>
             </div>
+
+            {passenger.type === 'child' && (
+              <div className="w-24 space-y-1">
+                 <label className="text-xs text-gray-500">العمر</label>
+                 <input
+                   type="number"
+                   min="0"
+                   max="18"
+                   className={`w-full h-10 p-2 border rounded-md text-right bg-white ${!passenger.age && validationErrors.passengers ? 'border-red-400 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`}
+                   value={passenger.age || ''}
+                   onChange={(e) => updatePassenger(passenger.id, { age: e.target.value ? parseInt(e.target.value) : undefined })}
+                   placeholder="العمر"
+                 />
+              </div>
+            )}
 
             <div className="w-10 flex justify-center pb-0.5">
                 {index > 0 ? (

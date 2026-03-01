@@ -7,6 +7,7 @@ export interface Passenger {
   name: string;
   type: 'adult' | 'child' | 'infant';
   passport?: string;
+  age?: number;
 }
 
 export interface HotelSegment {

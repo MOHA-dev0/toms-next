@@ -65,6 +65,7 @@ export default function EditQuotationPage() {
                 id: p.id,
                 name: p.name && p.name.toLowerCase() !== 'unknown' ? p.name : '',
                 type: p.type,
+                age: p.age,
               })) || [],
           },
           hotelSegments:

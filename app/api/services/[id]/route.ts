@@ -37,6 +37,10 @@ export async function PUT(
 
     return NextResponse.json(service);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues }, { status: 400 });
+    }
+    console.error('Error updating service:', error);
     return NextResponse.json({ error: 'Error updating service' }, { status: 500 });
   }
 }

@@ -14,11 +14,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    // Convert string prices to numbers if needed, though form sends strings mostly.
     // The service expects numbers for price.
     const formatedRoomTypes = body.roomTypes?.map((rt: any) => ({
       ...rt,
       price: parseFloat(rt.price) || 0,
+      pricings: rt.pricings?.map((p: any) => ({
+        ...p,
+        price: parseFloat(p.price) || 0,
+      })) || []
     })) || []
 
     const hotel = await hotelService.create({
@@ -26,8 +29,11 @@ export async function POST(request: Request) {
       roomTypes: formatedRoomTypes,
     })
     return NextResponse.json(hotel)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating hotel:', error)
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Error creating hotel' }, { status: 500 })
   }
 }

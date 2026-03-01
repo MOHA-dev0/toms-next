@@ -84,7 +84,8 @@ export default function HotelsPage() {
           board: rt.board,
           price: rt.basePrice,
           currency: rt.currency,
-          imageUrl: rt.imageUrl
+          imageUrl: rt.imageUrl,
+          roomPricing: rt.roomPricing
         }))
       };
       setCurrentHotel(formattedHotel);

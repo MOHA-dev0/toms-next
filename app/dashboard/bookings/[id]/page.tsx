@@ -98,7 +98,15 @@ export default function BookingDetailPage() {
       const paxHtml = pax.map((p:any) => {
         let fullName = p.name.toUpperCase().replace(/^(MR\.?|MRS\.?|MS\.?|MISS|CHD\.?|INF\.?)\s+/i, '');
         const title = getTitle(p.name, p.type || 'adult');
-        return `<tr><td style="padding: 3px 0;">${title} ${fullName}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
+
+        let subText = '';
+        if (p.type === 'child') {
+          subText = ` <span style="font-size: 10px; color: #555;"></span>`;
+        }
+
+        const ageCol = p.age != null ? String(p.age) : '';
+        
+        return `<tr><td style="padding: 3px 0;">${title} ${fullName}${subText}</td><td>${ageCol}</td><td></td><td></td><td></td><td></td></tr>`;
       }).join('');
 
       const html = `
