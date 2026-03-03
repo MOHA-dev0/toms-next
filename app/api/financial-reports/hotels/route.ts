@@ -9,7 +9,9 @@ export interface HotelFinancialItem {
   cityName: string;
   bookingsCount: number;
   totalNights: number;
+  totalPurchaseAmount: number;
   totalSellingAmount: number;
+  totalProfit: number;
 }
 
 export interface HotelFinancialResponse {
@@ -17,7 +19,9 @@ export interface HotelFinancialResponse {
   summary: {
     totalHotels: number;
     totalBookings: number;
+    totalPurchaseAmount: number;
     totalSellingAmount: number;
+    totalProfit: number;
   };
   meta: {
     totalCount: number;
@@ -38,6 +42,8 @@ export async function GET(request: Request): Promise<NextResponse<HotelFinancial
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
     const source = searchParams.get('source'); // b2b | b2c | null (all)
+    const fromDate = searchParams.get('from');
+    const toDate = searchParams.get('to');
 
     // Build quotation filter
     const quotationWhere: Prisma.QuotationWhereInput = { status: 'confirmed' };
@@ -45,15 +51,32 @@ export async function GET(request: Request): Promise<NextResponse<HotelFinancial
       quotationWhere.source = source;
     }
 
+    // Build date filter for check-in
+    const dateFilter: Record<string, Date> = {};
+    if (fromDate) {
+      dateFilter.gte = new Date(fromDate);
+    }
+    if (toDate) {
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999);
+      dateFilter.lte = to;
+    }
+
+    const qhWhere: Prisma.QuotationHotelWhereInput = {
+      quotation: quotationWhere,
+      ...(Object.keys(dateFilter).length > 0 ? { checkIn: dateFilter } : {}),
+    };
+
     const hotels = await prisma.hotel.findMany({
       where: { isActive: true },
       include: {
         city: { select: { nameAr: true } },
         quotationHotels: {
-          where: { quotation: quotationWhere },
+          where: qhWhere,
           select: {
             nights: true,
             roomsCount: true,
+            purchasePrice: true,
             sellingPrice: true,
           },
         },
@@ -62,6 +85,7 @@ export async function GET(request: Request): Promise<NextResponse<HotelFinancial
     });
 
     let totalBookings = 0;
+    let totalPurchase = 0;
     let totalSelling = 0;
 
     const allData: HotelFinancialItem[] = hotels.map((hotel) => {
@@ -69,11 +93,15 @@ export async function GET(request: Request): Promise<NextResponse<HotelFinancial
       const totalNights = hotel.quotationHotels.reduce(
         (sum, qh) => sum + (qh.nights * qh.roomsCount), 0
       );
+      const purchaseAmount = hotel.quotationHotels.reduce(
+        (sum, qh) => sum + Number(qh.purchasePrice) * qh.nights * qh.roomsCount, 0
+      );
       const sellingAmount = hotel.quotationHotels.reduce(
         (sum, qh) => sum + Number(qh.sellingPrice) * qh.nights * qh.roomsCount, 0
       );
 
       totalBookings += bookingsCount;
+      totalPurchase += purchaseAmount;
       totalSelling += sellingAmount;
 
       return {
@@ -82,7 +110,9 @@ export async function GET(request: Request): Promise<NextResponse<HotelFinancial
         cityName: hotel.city?.nameAr || '-',
         bookingsCount,
         totalNights,
+        totalPurchaseAmount: purchaseAmount,
         totalSellingAmount: sellingAmount,
+        totalProfit: sellingAmount - purchaseAmount,
       };
     });
 
@@ -101,7 +131,9 @@ export async function GET(request: Request): Promise<NextResponse<HotelFinancial
       summary: {
         totalHotels: allData.filter((h) => h.bookingsCount > 0).length,
         totalBookings,
+        totalPurchaseAmount: totalPurchase,
         totalSellingAmount: totalSelling,
+        totalProfit: totalSelling - totalPurchase,
       },
       meta: { totalCount, page, limit, pageCount: Math.ceil(totalCount / limit) },
     });

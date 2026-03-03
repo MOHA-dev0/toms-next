@@ -73,6 +73,7 @@ export const NAV_ITEMS = {
     { type: 'link', path: '/dashboard/hotels', label: 'الفنادق', icon: 'Building' },
     { type: 'link', path: '/dashboard/services', label: 'الخدمات', icon: 'Map' },
     { type: 'link', path: '/dashboard/other-services', label: 'الخدمات الأخرى', icon: 'Layers' },
+    { type: 'link', path: '/dashboard/service-providers', label: 'مزودي الخدمات', icon: 'Building' },
     { type: 'link', path: '/dashboard/companies', label: 'الشركات', icon: 'Building2' },
     { type: 'link', path: '/dashboard/agents', label: 'الوكلاء', icon: 'Briefcase' },
     { type: 'link', path: '/dashboard/employees', label: 'الموظفين', icon: 'Users' },

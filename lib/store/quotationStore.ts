@@ -38,6 +38,7 @@ export interface ServiceItem {
   dayNumber: number; // For daily program
   date: Date;
   serviceId: string;
+  providerId?: string; // Newly added
   name: string; // For custom/other services
   quantity: number;
   purchasePrice: number;

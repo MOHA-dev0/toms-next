@@ -14,33 +14,40 @@ export async function GET(
 
     const { id } = await params;
 
-    const quotation = await prisma.quotation.findUnique({
+    // 1. Fetch the main quotation first with simple select
+    const quotationBase = await prisma.quotation.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        referenceNumber: true,
+        customerId: true,
+        salesEmployeeId: true,
+        agentId: true,
+        source: true,
+        destinationCityId: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        adults: true,
+        children: true,
+        infants: true,
+        subtotal: true,
+        commissionAmount: true,
+        totalPrice: true,
+        profit: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+        paidAmount: true,
+        companyId: true,
         customer: true,
         destinationCity: true,
         cities_quotationdestinations: true,
         agent: true,
-        quotationHotels: {
-          include: {
-            hotel: { include: { city: true } },
-          roomType: true,
-          }
-        },
-        quotationServices: {
-          include: {
-            service: { include: { city: true } },
-          }
-        },
-        quotationFlights: true,
-        quotationCars: true,
-        passengers: {
-          orderBy: { createdAt: 'asc' }
-        },
       },
     });
 
-    if (!quotation) {
+    if (!quotationBase) {
       return NextResponse.json({ error: 'Quotation not found' }, { status: 404 });
     }
 
@@ -48,8 +55,8 @@ export async function GET(
     // Admin: everything.
     // Sales: only own.
     // Booking: own OR confirmed others.
-    const isOwner = quotation.salesEmployeeId === userContext.employeeId;
-    const isConfirmed = quotation.status === 'confirmed';
+    const isOwner = quotationBase.salesEmployeeId === userContext.employeeId;
+    const isConfirmed = quotationBase.status === 'confirmed';
 
     if (userContext.isSales && !isOwner) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
@@ -59,7 +66,142 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied - Quotation not confirmed' }, { status: 403 });
     }
 
-    return NextResponse.json(JSON.parse(JSON.stringify(quotation)));
+    // 2. Fetch heavy nested objects in parallel
+    const [
+      quotationHotels,
+      quotationServices,
+      quotationFlights,
+      quotationCars,
+      passengers,
+    ] = await Promise.all([
+      prisma.quotationHotel.findMany({
+        where: { quotationId: id },
+        select: {
+          id: true,
+          quotationId: true,
+          hotelId: true,
+          roomTypeId: true,
+          roomPricingId: true,
+          checkIn: true,
+          checkOut: true,
+          nights: true,
+          roomsCount: true,
+          usage: true,
+          board: true,
+          purchasePrice: true,
+          sellingPrice: true,
+          notes: true,
+          originalPrice: true,
+          originalCurrency: true,
+          exchangeRate: true,
+          createdAt: true,
+          hotel: {
+            select: {
+              id: true,
+              cityId: true,
+              nameAr: true,
+              nameTr: true,
+              addressAr: true,
+              addressTr: true,
+              stars: true,
+              phone: true,
+              email: true,
+              isActive: true,
+              createdAt: true,
+              city: true,
+            },
+          },
+          roomType: true,
+        },
+      }),
+      prisma.quotationService.findMany({
+        where: { quotationId: id },
+        select: {
+          id: true,
+          quotationId: true,
+          serviceId: true,
+          providerId: true,
+          nameAr: true,
+          descriptionAr: true,
+          quantity: true,
+          purchasePrice: true,
+          sellingPrice: true,
+          serviceDate: true,
+          createdAt: true,
+          descriptionEn: true,
+          service: {
+            select: {
+              id: true,
+              cityId: true,
+              nameAr: true,
+              nameEn: true,
+              descriptionAr: true,
+              purchasePrice: true,
+              currency: true,
+              isActive: true,
+              createdAt: true,
+              descriptionEn: true,
+              city: true,
+            },
+          },
+        },
+      }),
+      prisma.quotationFlight.findMany({
+        where: { quotationId: id },
+        select: {
+          id: true,
+          quotationId: true,
+          departureDate: true,
+          description: true,
+          flightType: true,
+          passengers: true,
+          price: true,
+          currency: true,
+          totalAmount: true,
+          createdAt: true,
+        },
+      }),
+      prisma.quotationCar.findMany({
+        where: { quotationId: id },
+        select: {
+          id: true,
+          quotationId: true,
+          pickupDate: true,
+          dropoffDate: true,
+          description: true,
+          days: true,
+          pricePerDay: true,
+          currency: true,
+          totalAmount: true,
+          createdAt: true,
+        },
+      }),
+      prisma.quotationPassenger.findMany({
+        where: { quotationId: id },
+        select: {
+          id: true,
+          quotationId: true,
+          name: true,
+          type: true,
+          passport: true,
+          age: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    // Assemble the complete payload to match the original response format exactly
+    const fullQuotation = {
+      ...quotationBase,
+      quotationHotels,
+      quotationServices,
+      quotationFlights,
+      quotationCars,
+      passengers,
+    };
+
+    return NextResponse.json(fullQuotation);
   } catch (error) {
     console.error('Error fetching quotation:', error);
     return NextResponse.json({ error: 'Failed to fetch quotation' }, { status: 500 });
@@ -105,7 +247,7 @@ export async function PUT(
       data: body,
     });
 
-    return NextResponse.json(JSON.parse(JSON.stringify(quotation)));
+    return NextResponse.json(quotation);
   } catch (error) {
     console.error('Error updating quotation:', error);
     return NextResponse.json({ error: 'Failed to update quotation' }, { status: 500 });

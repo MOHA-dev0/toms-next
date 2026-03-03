@@ -1,6 +1,7 @@
 "use client"
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, Download, TrendingUp, TrendingDown, DollarSign, Building, Hash, Briefcase, Users, CalendarDays, Search } from 'lucide-react';
@@ -36,12 +37,14 @@ interface HotelFinancialItem {
   cityName: string;
   bookingsCount: number;
   totalNights: number;
+  totalPurchaseAmount: number;
   totalSellingAmount: number;
+  totalProfit: number;
 }
 
 interface HotelFinancialData {
   data: HotelFinancialItem[];
-  summary: { totalHotels: number; totalBookings: number; totalSellingAmount: number; }
+  summary: { totalHotels: number; totalBookings: number; totalPurchaseAmount: number; totalSellingAmount: number; totalProfit: number; }
   meta: { totalCount: number; page: number; limit: number; pageCount: number; }
 }
 
@@ -63,10 +66,13 @@ type TabId = 'confirmed' | 'hotels' | 'agents';
 type SourceFilter = 'all' | 'b2b' | 'b2c';
 
 export default function FinancialReportsPage() {
+  const router = useRouter();
   const [filter, setFilter] = useState<TabId>('confirmed');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [hotelDateFrom, setHotelDateFrom] = useState('');
+  const [hotelDateTo, setHotelDateTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [hotelPage, setHotelPage] = useState(1);
@@ -90,9 +96,11 @@ export default function FinancialReportsPage() {
 
   // ── Hotel financial data ──
   const { data: hotelData, isLoading: hotelLoading, isError: hotelError, refetch: hotelRefetch } = useQuery<HotelFinancialData>({
-    queryKey: ['hotelFinancialReports', hotelPage],
+    queryKey: ['hotelFinancialReports', hotelPage, hotelDateFrom, hotelDateTo],
     queryFn: async () => {
-      const res = await fetch(`/api/financial-reports/hotels?page=${hotelPage}&limit=${limit}`);
+      const fromParam = hotelDateFrom ? `&from=${hotelDateFrom}` : '';
+      const toParam = hotelDateTo ? `&to=${hotelDateTo}` : '';
+      const res = await fetch(`/api/financial-reports/hotels?page=${hotelPage}&limit=${limit}${fromParam}${toParam}`);
       if (!res.ok) throw new Error('Failed to fetch');
       return res.json();
     },
@@ -114,7 +122,7 @@ export default function FinancialReportsPage() {
   const items = data?.data || [];
   const meta = data?.meta || { totalCount: 0, page: 1, limit: 10, pageCount: 1 };
 
-  const hotelSummary = hotelData?.summary || { totalHotels: 0, totalBookings: 0, totalSellingAmount: 0 };
+  const hotelSummary = hotelData?.summary || { totalHotels: 0, totalBookings: 0, totalPurchaseAmount: 0, totalSellingAmount: 0, totalProfit: 0 };
   const hotelItems = hotelData?.data || [];
   const hotelMeta = hotelData?.meta || { totalCount: 0, page: 1, limit: 10, pageCount: 1 };
 
@@ -248,26 +256,40 @@ export default function FinancialReportsPage() {
       )}
 
       {filter === 'hotels' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 sm:gap-5">
           <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden group transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
-            <CardContent className="p-6 flex flex-col items-center justify-center pt-8 pb-8">
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full mb-4"><Building size={24} /></div>
-              <div className="text-3xl font-black text-slate-700 mb-2">{hotelSummary.totalHotels}</div>
-              <div className="text-sm font-bold text-slate-400">إجمالي الفنادق</div>
+            <CardContent className="p-5 flex flex-col items-center justify-center pt-6 pb-6">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full mb-3"><Building size={22} /></div>
+              <div className="text-2xl font-black text-slate-700 mb-1">{hotelSummary.totalHotels}</div>
+              <div className="text-xs font-bold text-slate-400">الفنادق</div>
             </CardContent>
           </Card>
           <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden group transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
-            <CardContent className="p-6 flex flex-col items-center justify-center pt-8 pb-8">
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-4"><Hash size={24} /></div>
-              <div className="text-3xl font-black text-slate-700 mb-2">{hotelSummary.totalBookings}</div>
-              <div className="text-sm font-bold text-slate-400">إجمالي الحجوزات</div>
+            <CardContent className="p-5 flex flex-col items-center justify-center pt-6 pb-6">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3"><Hash size={22} /></div>
+              <div className="text-2xl font-black text-slate-700 mb-1">{hotelSummary.totalBookings}</div>
+              <div className="text-xs font-bold text-slate-400">الحجوزات</div>
             </CardContent>
           </Card>
           <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden group transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
-            <CardContent className="p-6 flex flex-col items-center justify-center pt-8 pb-8">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-full mb-4"><DollarSign size={24} /></div>
-              <div className="text-3xl font-black text-emerald-600 mb-2">{formatCurrency(hotelSummary.totalSellingAmount)}</div>
-              <div className="text-sm font-bold text-emerald-700/60">إجمالي المبالغ</div>
+            <CardContent className="p-5 flex flex-col items-center justify-center pt-6 pb-6">
+              <div className="p-3 bg-rose-50 text-rose-600 rounded-full mb-3"><TrendingDown size={22} /></div>
+              <div className="text-2xl font-black text-rose-600 mb-1">{formatCurrency(hotelSummary.totalPurchaseAmount)}</div>
+              <div className="text-xs font-bold text-rose-400">تكلفة الشراء</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden group transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
+            <CardContent className="p-5 flex flex-col items-center justify-center pt-6 pb-6">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3"><DollarSign size={22} /></div>
+              <div className="text-2xl font-black text-blue-600 mb-1">{formatCurrency(hotelSummary.totalSellingAmount)}</div>
+              <div className="text-xs font-bold text-blue-400">إجمالي البيع</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden group transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
+            <CardContent className="p-5 flex flex-col items-center justify-center pt-6 pb-6">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-full mb-3"><TrendingUp size={22} /></div>
+              <div className="text-2xl font-black text-emerald-600 mb-1">{formatCurrency(hotelSummary.totalProfit)}</div>
+              <div className="text-xs font-bold text-emerald-400">الربح</div>
             </CardContent>
           </Card>
         </div>
@@ -365,6 +387,23 @@ export default function FinancialReportsPage() {
         </div>
       )}
 
+      {/* Date Range — Hotels tab */}
+      {filter === 'hotels' && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 p-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-xl w-fit">
+            <span className="text-xs font-bold text-slate-400 px-2 flex items-center gap-1.5"><CalendarDays size={13} /> فترة الحجز</span>
+            <input type="date" value={hotelDateFrom} onChange={(e) => { setHotelDateFrom(e.target.value); setHotelPage(1); }}
+              className="bg-white text-xs font-medium text-slate-700 rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none focus:border-blue-300 transition-all w-[130px]" />
+            <span className="text-slate-300 text-xs">—</span>
+            <input type="date" value={hotelDateTo} onChange={(e) => { setHotelDateTo(e.target.value); setHotelPage(1); }}
+              className="bg-white text-xs font-medium text-slate-700 rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none focus:border-blue-300 transition-all w-[130px]" />
+            {(hotelDateFrom || hotelDateTo) && (
+              <button onClick={() => { setHotelDateFrom(''); setHotelDateTo(''); setHotelPage(1); }}
+                className="text-xs text-rose-500 hover:text-rose-700 font-bold px-2 py-1 rounded-lg hover:bg-rose-50 transition-all">✕</button>
+            )}
+          </div>
+        </div>
+      )}
       {/* ═══════════ CONFIRMED TAB ═══════════ */}
       {filter === 'confirmed' && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
@@ -441,18 +480,31 @@ export default function FinancialReportsPage() {
                       <TableHead className="text-right text-slate-500 font-semibold">المدينة</TableHead>
                       <TableHead className="text-right text-slate-500 font-semibold">عدد الحجوزات</TableHead>
                       <TableHead className="text-right text-slate-500 font-semibold">إجمالي الليالي</TableHead>
-                      <TableHead className="text-right text-slate-500 font-semibold">المجموع الكلي</TableHead>
+                      <TableHead className="text-right text-slate-500 font-semibold">تكلفة الشراء</TableHead>
+                      <TableHead className="text-right text-slate-500 font-semibold">إجمالي البيع</TableHead>
+                      <TableHead className="text-right text-slate-500 font-semibold">الربح</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {hotelItems.map((hotel, index) => (
                       <TableRow key={hotel.id} className="hover:bg-slate-50/50 transition-colors">
                         <TableCell className="font-medium text-slate-500">{(hotelMeta.page - 1) * hotelMeta.limit + index + 1}</TableCell>
-                        <TableCell className="font-bold text-[#25396f]">{hotel.hotelName}</TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => router.push(`/dashboard/financial-reports/hotels/${hotel.id}`)}
+                            className="font-bold text-[#25396f] hover:text-blue-700 hover:underline transition-colors cursor-pointer text-right"
+                          >
+                            {hotel.hotelName}
+                          </button>
+                        </TableCell>
                         <TableCell className="font-medium text-slate-700">{hotel.cityName}</TableCell>
                         <TableCell className="font-bold text-slate-700">{hotel.bookingsCount}</TableCell>
                         <TableCell className="text-slate-600">{hotel.totalNights}</TableCell>
-                        <TableCell className="font-bold text-slate-700">{formatCurrency(hotel.totalSellingAmount)}</TableCell>
+                        <TableCell className="font-bold text-rose-600">{formatCurrency(hotel.totalPurchaseAmount)}</TableCell>
+                        <TableCell className="font-bold text-blue-600">{formatCurrency(hotel.totalSellingAmount)}</TableCell>
+                        <TableCell className={cn("font-bold", hotel.totalProfit >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                          {formatCurrency(hotel.totalProfit)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuotationStore } from "@/lib/store/quotationStore";
-import { getServices } from "@/app/actions/quotation-actions";
+import { getServices, getServiceProviders } from "@/app/actions/quotation-actions";
 import { format, addDays } from "date-fns";
 import { Plus, Trash2, Coins } from "lucide-react";
 import { toast } from "sonner";
@@ -10,18 +10,20 @@ import { toast } from "sonner";
 export default function StepServices() {
   const { basicInfo, itineraryServices, addService, updateService, removeService } = useQuotationStore();
   const [availableServices, setAvailableServices] = useState<{ id: string; nameAr: string; nameEn: string | null; purchasePrice: number; currency: string; cityId: string }[]>([]);
+  const [providers, setProviders] = useState<{ id: string; name: string }[]>([]);
+  const [defaultProviderId, setDefaultProviderId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
-  // Fetch available services on mount
+  // Fetch available services and providers on mount
   useEffect(() => {
-    getServices()
-      .then((data) => {
-        console.log("Services fetched:", data); // Debug log
-        setAvailableServices(data);
+    Promise.all([getServices(), getServiceProviders()])
+      .then(([servicesData, providersData]) => {
+        setAvailableServices(servicesData);
+        setProviders(providersData);
       })
       .catch((error) => {
-        console.error("Error fetching services:", error);
-        toast.error("فشل في تحميل الخدمات");
+        console.error("Error fetching data:", error);
+        toast.error("فشل في تحميل الخدمات أو المزودين");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -45,6 +47,7 @@ export default function StepServices() {
           dayNumber: dayNum,
           date: addDays(startDate, i),
           serviceId: "",
+          providerId: defaultProviderId || "",
           name: "",
           quantity: 1, // Default Days = 1
           purchasePrice: 0,
@@ -53,7 +56,7 @@ export default function StepServices() {
         }, 'itinerary');
       }
     }
-  }, [basicInfo.startDate, basicInfo.nights, itineraryServices.length, addService]);
+  }, [basicInfo.startDate, basicInfo.nights, itineraryServices.length, addService, defaultProviderId]);
 
   const handleServiceSelect = (serviceId: string, itemId: string) => {
     console.log("Selecting service:", serviceId);
@@ -85,12 +88,29 @@ export default function StepServices() {
     }
   };
 
+  const handleProviderSelect = (newProviderId: string, itemId: string) => {
+    updateService(itemId, { providerId: newProviderId }, 'itinerary');
+    
+    if (newProviderId && !defaultProviderId) {
+       setDefaultProviderId(newProviderId);
+       
+       itineraryServices.forEach(srv => {
+           if (!srv.providerId) {
+               updateService(srv.id, { providerId: newProviderId }, 'itinerary');
+           }
+       });
+    } else if (newProviderId) {
+       setDefaultProviderId(newProviderId);
+    }
+  };
+
   const handleAddServiceOnDay = (date: Date, dayNumber: number) => {
     addService({
       id: crypto.randomUUID(),
       dayNumber: dayNumber,
       date: date,
       serviceId: "",
+      providerId: defaultProviderId || "",
       name: "",
       quantity: 1,
       purchasePrice: 0,
@@ -140,6 +160,7 @@ export default function StepServices() {
                     <tr>
                         <th className="px-4 py-3 border-b text-center w-32">التاريخ</th>
                         <th className="px-4 py-3 border-b">الخدمة</th>
+                        <th className="px-4 py-3 border-b w-40">المزود</th>
                         <th className="px-4 py-3 border-b w-24 text-center">الأيام</th>
                         <th className="px-4 py-3 border-b w-32 text-center">السعر</th>
                         <th className="px-4 py-3 border-b w-24 text-center">العملة</th>
@@ -187,6 +208,20 @@ export default function StepServices() {
                                                     <option value="">-- اختر الخدمة --</option>
                                                     {filteredAvailableServices.map(s => (
                                                         <option key={s.id} value={s.id}>{s.nameAr}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+
+                                            <td className="px-4 py-2">
+                                                <select
+                                                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    value={item.providerId || ""}
+                                                    onChange={(e) => handleProviderSelect(e.target.value, item.id)}
+                                                    disabled={!item.serviceId}
+                                                >
+                                                    <option value="">-- اختر المزود --</option>
+                                                    {providers.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name}</option>
                                                     ))}
                                                 </select>
                                             </td>
@@ -242,7 +277,7 @@ export default function StepServices() {
                                                 <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">اليوم {day.dayNumber}</span>
                                             </div>
                                         </td>
-                                        <td colSpan={6} className="px-4 py-4 text-center bg-gray-50/50">
+                                            <td colSpan={7} className="px-4 py-4 text-center bg-gray-50/50">
                                             <button 
                                                 onClick={() => handleAddServiceOnDay(day.date, day.dayNumber)}
                                                 className="text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center gap-2 mx-auto"

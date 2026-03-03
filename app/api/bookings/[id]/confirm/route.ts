@@ -129,8 +129,8 @@ export async function POST(
         voucherCode: generateUniqueCode(),
         guestNameAr: guestTr,
         guestNameTr: guestTr,
-        notesAr: `${c.carTypeAr} | ${c.pickupLocation}${c.dropoffLocation ? ` → ${c.dropoffLocation}` : ''}`,
-        notesTr: `${c.carTypeAr} | ${c.pickupLocation}${c.dropoffLocation ? ` → ${c.dropoffLocation}` : ''}`,
+        notesAr: c.description || 'سيارة',
+        notesTr: c.description || 'Car',
         createdBy: userContext.employeeId,
       });
     }

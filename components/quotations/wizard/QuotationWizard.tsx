@@ -16,6 +16,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { finalizeQuotation } from "@/app/actions/quotation-actions";
 import { calculateQuotationTotals } from "@/lib/pricing-engine";
 import { createDraftQuotationSchema, formatZodErrors } from "@/lib/validations/quotation";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface QuotationWizardProps {
   isEditMode?: boolean;
@@ -26,10 +35,53 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [dialogType, setDialogType] = useState<'none' | 'program_ended' | 'price_locking'>('none');
   const router = useRouter();
   const queryClient = useQueryClient();
   const state = useQuotationStore();
   const { basicInfo, setBasicInfo, reset } = state;
+
+  const proceedWithFinalize = async (rebalanceMode: 'update_total' | 'rebalance_internally') => {
+    setDialogType('none');
+    setIsSubmitting(true);
+    try {
+      if (basicInfo.quotationId) {
+        const totals = calculateQuotationTotals(state);
+        // From pricing-engine: 
+        // - totalCost (sum of purchases) -> we map to 'subtotal' in DB
+        // - profit (markup)
+        // - commissionAmount
+        // - totalSales (Sales Price) -> mapped to 'totalPrice' in DB
+        await finalizeQuotation(basicInfo.quotationId, {
+          status: existingStatus === 'confirmed' ? 'confirmed' : 'sent',
+          subtotal: totals.totalCost,
+          totalPrice: totals.totalSales,
+          profit: totals.profit,
+          commissionAmount: totals.commissionAmount,
+          rebalanceMode
+        }, {
+          basicInfo: state.basicInfo,
+          hotelSegments: state.hotelSegments,
+          flights: state.flights,
+          isFlightsEnabled: state.isFlightsEnabled,
+          carRentals: state.carRentals,
+          isCarsEnabled: state.isCarsEnabled,
+          itineraryServices: state.itineraryServices,
+          otherServices: state.otherServices,
+        });
+      }
+      toast.success("تم تحديث الفاتورة والتسعير النهائي بنجاح!");
+      
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      reset(); // Reset wizard store for the next time
+      router.push("/dashboard/quotations");
+    } catch (error: any) {
+      console.error("Failed to finalize quotation:", error);
+      toast.error("حدث خطأ أثناء حفظ الفاتورة");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleNext = async () => {
     if (currentStep === 1) {
@@ -111,47 +163,21 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
         setIsSubmitting(false);
       }
     } else if (currentStep === 6) {
-        if (existingStatus === 'confirmed') {
-          const confirmUpdate = window.confirm("هذا العرض مؤكد بالفعل. هل أنت متأكد من رغبتك في تحديثه؟ (This quotation is already confirmed. Are you sure you want to update it?)");
-          if (!confirmUpdate) return;
-        }
+        if (isEditMode && existingStatus !== 'draft') {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const endDate = basicInfo.endDate ? new Date(basicInfo.endDate) : null;
+          if (endDate) endDate.setHours(0, 0, 0, 0);
 
-        setIsSubmitting(true);
-        try {
-          if (basicInfo.quotationId) {
-            const totals = calculateQuotationTotals(state);
-            // From pricing-engine: 
-            // - totalCost (sum of purchases) -> we map to 'subtotal' in DB
-            // - profit (markup)
-            // - commissionAmount
-            // - totalSales (Sales Price) -> mapped to 'totalPrice' in DB
-            await finalizeQuotation(basicInfo.quotationId, {
-              status: existingStatus === 'confirmed' ? 'confirmed' : 'sent',
-              subtotal: totals.totalCost,
-              totalPrice: totals.totalSales,
-              profit: totals.profit,
-              commissionAmount: totals.commissionAmount
-            }, {
-              basicInfo: state.basicInfo,
-              hotelSegments: state.hotelSegments,
-              flights: state.flights,
-              isFlightsEnabled: state.isFlightsEnabled,
-              carRentals: state.carRentals,
-              isCarsEnabled: state.isCarsEnabled,
-              itineraryServices: state.itineraryServices,
-              otherServices: state.otherServices,
-            });
+          const isProgramEnded = endDate && endDate < today;
+
+          if (existingStatus === 'confirmed' && isProgramEnded) {
+            setDialogType('program_ended');
+          } else {
+            setDialogType('price_locking');
           }
-          toast.success("تم تحديث الفاتورة والتسعير النهائي بنجاح!");
-          
-          queryClient.invalidateQueries({ queryKey: ['quotations'] });
-          reset(); // Reset wizard store for the next time
-          router.push("/dashboard/quotations");
-        } catch (error: any) {
-          console.error("Failed to finalize quotation:", error);
-          toast.error("حدث خطأ أثناء حفظ الفاتورة");
-        } finally {
-          setIsSubmitting(false);
+        } else {
+          proceedWithFinalize('update_total');
         }
     } else {
         if (currentStep === 2) {
@@ -231,6 +257,58 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
           )}
         </button>
       </div>
+
+      {/* Action Dialog */}
+      <AlertDialog open={dialogType !== 'none'} onOpenChange={(open) => {
+        if (!open) setDialogType('none');
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right">
+              {dialogType === 'program_ended' ? 'تحديث عرض مؤكد ومنتهي' : 'تأكيد تعديل الأسعار'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              {dialogType === 'program_ended' ? (
+                <>
+                  هذا العرض <span className="font-bold text-foreground">منتهي ومؤكد</span>.
+                  {' '}يمكنك فقط تعديل التكاليف الداخلية. لا يمكن تغيير السعر الإجمالي للعرض.
+                  {' '}هل تريد المتابعة؟
+                </>
+              ) : (
+                <>
+                  هل تريد لهذه التعديلات أن تؤثر على <span className="font-bold text-foreground">السعر الإجمالي</span> للعرض؟
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="ml-0" onClick={() => setDialogType('none')}>إلغاء</AlertDialogCancel>
+            {dialogType === 'program_ended' ? (
+              <button
+                onClick={() => proceedWithFinalize('rebalance_internally')}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white transition-colors"
+              >
+                متابعة وتحديث التكاليف
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => proceedWithFinalize('rebalance_internally')}
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                >
+                  الإبقاء على السعر
+                </button>
+                <button
+                  onClick={() => proceedWithFinalize('update_total')}
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                >
+                  تحديث السعر الإجمالي
+                </button>
+              </>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

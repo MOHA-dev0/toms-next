@@ -286,39 +286,38 @@ model QuotationHotel {
 }
 
 model QuotationService {
-  id            String    @id @default(uuid())
-  quotationId   String    @map("quotation_id")
-  serviceId     String?   @map("service_id")
-  nameAr        String    @map("name_ar")
-  descriptionAr String?   @map("description_ar") @db.Text
-  quantity      Int       @default(1)
-  purchasePrice Decimal   @map("purchase_price") @db.Decimal(10, 2)
-  sellingPrice  Decimal   @map("selling_price") @db.Decimal(10, 2)
-  serviceDate   DateTime? @map("service_date") @db.Date
-  createdAt     DateTime  @default(now()) @map("created_at")
-  descriptionEn String?   @map("description_en") @db.Text
-  quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
-  service       Service?  @relation(fields: [serviceId], references: [id])
+  id            String           @id @default(uuid())
+  quotationId   String           @map("quotation_id")
+  serviceId     String?          @map("service_id")
+  providerId    String?          @map("provider_id")
+  nameAr        String           @map("name_ar")
+  descriptionAr String?          @map("description_ar") @db.Text
+  quantity      Int              @default(1)
+  purchasePrice Decimal          @map("purchase_price") @db.Decimal(10, 2)
+  sellingPrice  Decimal          @map("selling_price") @db.Decimal(10, 2)
+  serviceDate   DateTime?        @map("service_date") @db.Date
+  createdAt     DateTime         @default(now()) @map("created_at")
+  descriptionEn String?          @map("description_en") @db.Text
+  quotation     Quotation        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  service       Service?         @relation(fields: [serviceId], references: [id])
+  provider      ServiceProvider? @relation(fields: [providerId], references: [id])
 
   @@index([quotationId], map: "quotation_services_quotation_id_fkey")
   @@index([serviceId], map: "quotation_services_service_id_fkey")
+  @@index([providerId], map: "quotation_services_provider_id_fkey")
   @@map("quotation_services")
 }
 
 model QuotationFlight {
   id            String    @id @default(uuid())
   quotationId   String    @map("quotation_id")
-  airlineAr     String    @map("airline_ar")
-  flightNumber  String?   @map("flight_number")
-  departureCity String    @map("departure_city")
-  arrivalCity   String    @map("arrival_city")
   departureDate DateTime  @map("departure_date") @db.Date
-  departureTime DateTime? @map("departure_time") @db.Time(0)
-  arrivalTime   DateTime? @map("arrival_time") @db.Time(0)
+  description   String?   @db.Text
+  flightType    String    @map("flight_type") @default("domestic")
   passengers    Int       @default(1)
-  purchasePrice Decimal   @map("purchase_price") @db.Decimal(10, 2)
-  sellingPrice  Decimal   @map("selling_price") @db.Decimal(10, 2)
-  notes         String?   @db.Text
+  price         Decimal   @db.Decimal(10, 2)
+  currency      Currency  @default(USD)
+  totalAmount   Decimal   @map("total_amount") @db.Decimal(12, 2)
   createdAt     DateTime  @default(now()) @map("created_at")
   quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
@@ -329,15 +328,13 @@ model QuotationFlight {
 model QuotationCar {
   id              String    @id @default(uuid())
   quotationId     String    @map("quotation_id")
-  carTypeAr       String    @map("car_type_ar")
-  pickupLocation  String    @map("pickup_location")
-  dropoffLocation String?   @map("dropoff_location")
   pickupDate      DateTime  @map("pickup_date") @db.Date
   dropoffDate     DateTime  @map("dropoff_date") @db.Date
+  description     String?    @db.Text
   days            Int       @default(1)
-  purchasePrice   Decimal   @map("purchase_price") @db.Decimal(10, 2)
-  sellingPrice    Decimal   @map("selling_price") @db.Decimal(10, 2)
-  notes           String?   @db.Text
+  pricePerDay     Decimal   @map("price_per_day") @db.Decimal(10, 2)
+  currency        Currency  @default(USD)
+  totalAmount     Decimal   @map("total_amount") @db.Decimal(12, 2)
   createdAt       DateTime  @default(now()) @map("created_at")
   quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
@@ -544,4 +541,15 @@ enum Currency {
   SAR
   AED
   GBP
+}
+
+model ServiceProvider {
+  id                String             @id @default(uuid())
+  name              String
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  quotationServices QuotationService[]
+
+  @@map("service_providers")
 }
