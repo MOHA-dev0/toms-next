@@ -4,6 +4,7 @@ import { useQuotationStore } from "@/lib/store/quotationStore";
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { useQuery } from "@tanstack/react-query";
 
 import { getQuotationReferenceData } from "@/app/actions/quotation-actions";
 
@@ -26,23 +27,31 @@ export default function StepBasicInfo({ validationErrors = {} }: StepBasicInfoPr
     employees: { id: string; nameAr: string }[];
   }>({ agents: [], companies: [], cities: [], employees: [] });
 
+  const { data: qData } = useQuery({
+    queryKey: ['quotationReferenceData'],
+    queryFn: () => getQuotationReferenceData(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
     setMounted(true);
-    // Fetch data
-    getQuotationReferenceData().then(data => {
+  }, []);
+
+  useEffect(() => {
+    if (qData) {
         setReferenceData({
-            agents: data.agents,
-            companies: data.companies,
-            cities: data.cities,
-            employees: data.employees
+            agents: qData.agents,
+            companies: qData.companies,
+            cities: qData.cities,
+            employees: qData.employees
         });
         
         // Auto-select Sales Person if not set
-        if (!basicInfo.salesPersonId && data.currentEmployeeId) {
-            setBasicInfo({ salesPersonId: data.currentEmployeeId });
+        if (!basicInfo.salesPersonId && qData.currentEmployeeId) {
+            setBasicInfo({ salesPersonId: qData.currentEmployeeId });
         }
-    });
-  }, []);
+    }
+  }, [qData, basicInfo.salesPersonId, setBasicInfo]);
 
   // Ensure at least one destination input exists
   useEffect(() => {

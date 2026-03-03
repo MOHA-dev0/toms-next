@@ -11,6 +11,8 @@ import { useQuotations } from '@/hooks/useQuotations';
 import PaymentModal from './PaymentModal';
 import { QuotationTable, Quotation } from '@/components/quotations/QuotationTable';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { getQuotationReferenceData } from '@/app/actions/quotation-actions';
 
 interface Meta {
   totalCount: number;
@@ -23,9 +25,19 @@ interface Meta {
 
 export default function QuotationsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   
+  useEffect(() => {
+    // Prefetch reference data so it's ready when creating/editing a quotation
+    queryClient.prefetchQuery({
+      queryKey: ['quotationReferenceData'],
+      queryFn: () => getQuotationReferenceData(),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [queryClient]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);

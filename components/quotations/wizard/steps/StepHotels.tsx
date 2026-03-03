@@ -7,6 +7,7 @@ import { Plus, Trash2, Hotel, Coins, RefreshCw, AlertTriangle, Info } from "luci
 import { toast } from "sonner";
 import { HotelSegment } from "@/lib/store/quotationStore";
 import { DatePicker } from "@/components/ui/date-picker";
+import { useQuery } from "@tanstack/react-query";
 
 // ── Helper: fetch exchange rate from API ──────────────────────────────
 async function fetchRate(from: string, to: string = 'USD'): Promise<{ rate: number; source: string } | null> {
@@ -111,11 +112,17 @@ export default function StepHotels() {
   const [manualRateNeeded, setManualRateNeeded] = useState<Record<string, { price: number; currency: string }>>({});
   const [convertingSegments, setConvertingSegments] = useState<Set<string>>(new Set());
 
+  const { data: qData } = useQuery({
+    queryKey: ['quotationReferenceData'],
+    queryFn: () => getQuotationReferenceData(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
-    getQuotationReferenceData().then((data) => {
-      setCities(data.cities);
-    });
-  }, []);
+    if (qData?.cities) {
+      setCities(qData.cities);
+    }
+  }, [qData]);
 
   // Pre-load hotels for existing segments
   const cityIdsString = hotelSegments.map(s => s.cityId).join(',');

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Building, Search, FileUp, Download, BedDouble, LayoutGrid, List, MapPin } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building, Search, FileUp, Download, BedDouble, LayoutGrid, List, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,8 @@ export default function HotelsPage() {
   const [currentHotel, setCurrentHotel] = useState<any | null>(null);
   const [deleteHotel, setDeleteHotel] = useState<Hotel | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 9;
   
   const { toast } = useToast();
 
@@ -127,6 +130,13 @@ export default function HotelsPage() {
     hotel.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
     hotel.city?.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const pageCount = Math.ceil(filteredHotels.length / ITEMS_PER_PAGE);
+  const currentHotels = filteredHotels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <div className="p-8 space-y-6">
@@ -210,7 +220,7 @@ export default function HotelsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" dir="rtl">
-              {filteredHotels.map((hotel) => (
+              {currentHotels.map((hotel) => (
                 <DataCard
                   key={hotel.id}
                   title={hotel.nameAr}
@@ -272,6 +282,60 @@ export default function HotelsPage() {
                   footerValueSub="غرفة"
                 />
               ))}
+            </div>
+          )}
+
+          {activeTab === 'hotels' && pageCount > 1 && !isLoading && currentHotels.length > 0 && (
+            <div className="flex items-center justify-between px-6 py-4 mt-6 bg-white border border-gray-100 rounded-xl shadow-sm">
+              <p className="text-sm font-medium text-gray-500">
+                عرض صفحة <span className="font-bold text-gray-700">{currentPage}</span> من <span className="font-bold text-gray-700">{pageCount}</span>
+              </p>
+              <div className="flex gap-1" dir="rtl">
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-8 w-8 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronRight size={16} />
+                </Button>
+                
+                {Array.from({ length: pageCount }).map((_, idx) => {
+                  const pageNum = idx + 1;
+                  if (pageCount > 5 && Math.abs(currentPage - pageNum) > 1 && pageNum !== 1 && pageNum !== pageCount) {
+                    if (pageNum === 2 || pageNum === pageCount - 1) return <span key={pageNum} className="px-2 self-end text-gray-400">...</span>;
+                    return null;
+                  }
+
+                  return (
+                    <Button 
+                      key={pageNum}
+                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        "h-8 min-w-8 font-bold border-transparent transition-all",
+                        currentPage === pageNum 
+                          ? "bg-blue-900 text-white shadow-sm hover:bg-blue-800" 
+                          : "bg-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200"
+                      )}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="h-8 w-8 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200"
+                  onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+                  disabled={currentPage === pageCount}
+                >
+                  <ChevronLeft size={16} />
+                </Button>
+              </div>
             </div>
           )}
 
