@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -102,7 +102,7 @@ model Hotel {
   roomTypes       RoomType[]
   vouchers        Voucher[]
 
-  @@index([cityId], map: "hotels_city_id_fkey")
+  @@index([cityId], map: "hotels_city_id_idx")
   @@map("hotels")
 }
 
@@ -123,7 +123,7 @@ model RoomType {
   roomPricing     RoomPricing[]
   hotel           Hotel            @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
-  @@index([hotelId], map: "room_types_hotel_id_fkey")
+  @@index([hotelId], map: "room_types_hotel_id_idx")
   @@map("room_types")
 }
 
@@ -142,7 +142,7 @@ model RoomPricing {
   quotationHotels QuotationHotel[]
   roomType        RoomType         @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
 
-  @@index([roomTypeId], map: "room_pricing_room_type_id_fkey")
+  @@index([roomTypeId], map: "room_pricing_room_type_id_idx")
   @@map("room_pricing")
 }
 
@@ -160,7 +160,7 @@ model Service {
   quotationServices QuotationService[]
   city              City               @relation(fields: [cityId], references: [id], onDelete: Cascade)
 
-  @@index([cityId], map: "services_city_id_fkey")
+  @@index([cityId], map: "services_city_id_idx")
   @@map("services")
 }
 
@@ -204,7 +204,7 @@ model Customer {
   payments       Payment[]
   quotations     Quotation[]
 
-  @@index([createdBy], map: "customers_created_by_fkey")
+  @@index([createdBy], map: "customers_created_by_idx")
   @@map("customers")
 }
 
@@ -246,11 +246,11 @@ model Quotation {
   salesEmployee                Employee             @relation("SalesEmployee", fields: [salesEmployeeId], references: [id])
   cities_quotationdestinations City[]               @relation("quotationdestinations")
 
-  @@index([agentId], map: "quotations_agent_id_fkey")
-  @@index([companyId], map: "quotations_company_id_fkey")
-  @@index([customerId], map: "quotations_customer_id_fkey")
-  @@index([destinationCityId], map: "quotations_destination_city_id_fkey")
-  @@index([salesEmployeeId], map: "quotations_sales_employee_id_fkey")
+  @@index([agentId], map: "quotations_agent_id_idx")
+  @@index([companyId], map: "quotations_company_id_idx")
+  @@index([customerId], map: "quotations_customer_id_idx")
+  @@index([destinationCityId], map: "quotations_destination_city_id_idx")
+  @@index([salesEmployeeId], map: "quotations_sales_employee_id_idx")
   @@map("quotations")
 }
 
@@ -278,10 +278,10 @@ model QuotationHotel {
   roomPricing      RoomPricing? @relation(fields: [roomPricingId], references: [id])
   roomType         RoomType     @relation(fields: [roomTypeId], references: [id])
 
-  @@index([hotelId], map: "quotation_hotels_hotel_id_fkey")
-  @@index([quotationId], map: "quotation_hotels_quotation_id_fkey")
-  @@index([roomPricingId], map: "quotation_hotels_room_pricing_id_fkey")
-  @@index([roomTypeId], map: "quotation_hotels_room_type_id_fkey")
+  @@index([hotelId], map: "quotation_hotels_hotel_id_idx")
+  @@index([quotationId], map: "quotation_hotels_quotation_id_idx")
+  @@index([roomPricingId], map: "quotation_hotels_room_pricing_id_idx")
+  @@index([roomTypeId], map: "quotation_hotels_room_type_id_idx")
   @@map("quotation_hotels")
 }
 
@@ -302,9 +302,9 @@ model QuotationService {
   service       Service?         @relation(fields: [serviceId], references: [id])
   provider      ServiceProvider? @relation(fields: [providerId], references: [id])
 
-  @@index([quotationId], map: "quotation_services_quotation_id_fkey")
-  @@index([serviceId], map: "quotation_services_service_id_fkey")
-  @@index([providerId], map: "quotation_services_provider_id_fkey")
+  @@index([quotationId], map: "quotation_services_quotation_id_idx")
+  @@index([serviceId], map: "quotation_services_service_id_idx")
+  @@index([providerId], map: "quotation_services_provider_id_idx")
   @@map("quotation_services")
 }
 
@@ -321,7 +321,7 @@ model QuotationFlight {
   createdAt     DateTime  @default(now()) @map("created_at")
   quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([quotationId], map: "quotation_flights_quotation_id_fkey")
+  @@index([quotationId], map: "quotation_flights_quotation_id_idx")
   @@map("quotation_flights")
 }
 
@@ -338,7 +338,7 @@ model QuotationCar {
   createdAt       DateTime  @default(now()) @map("created_at")
   quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([quotationId], map: "quotation_cars_quotation_id_fkey")
+  @@index([quotationId], map: "quotation_cars_quotation_id_idx")
   @@map("quotation_cars")
 }
 
@@ -354,8 +354,8 @@ model QuotationItinerary {
   city          City?     @relation(fields: [cityId], references: [id])
   quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([cityId], map: "quotation_itinerary_city_id_fkey")
-  @@index([quotationId], map: "quotation_itinerary_quotation_id_fkey")
+  @@index([cityId], map: "quotation_itinerary_city_id_idx")
+  @@index([quotationId], map: "quotation_itinerary_quotation_id_idx")
   @@map("quotation_itinerary")
 }
 
@@ -373,8 +373,8 @@ model Booking {
   quotation         Quotation     @relation(fields: [quotationId], references: [id])
   vouchers          Voucher[]
 
-  @@index([bookingEmployeeId], map: "bookings_booking_employee_id_fkey")
-  @@index([quotationId], map: "bookings_quotation_id_fkey")
+  @@index([bookingEmployeeId], map: "bookings_booking_employee_id_idx")
+  @@index([quotationId], map: "bookings_quotation_id_idx")
   @@map("bookings")
 }
 
@@ -400,9 +400,9 @@ model Voucher {
   createdEmployee Employee?   @relation("VoucherCreatedBy", fields: [createdBy], references: [id])
   hotel           Hotel?      @relation(fields: [hotelId], references: [id])
 
-  @@index([bookingId], map: "vouchers_booking_id_fkey")
-  @@index([createdBy], map: "vouchers_created_by_fkey")
-  @@index([hotelId], map: "vouchers_hotel_id_fkey")
+  @@index([bookingId], map: "vouchers_booking_id_idx")
+  @@index([createdBy], map: "vouchers_created_by_idx")
+  @@index([hotelId], map: "vouchers_hotel_id_idx")
   @@map("vouchers")
 }
 
@@ -422,9 +422,9 @@ model Payment {
   customer        Customer?  @relation(fields: [customerId], references: [id])
   quotation       Quotation? @relation(fields: [quotationId], references: [id])
 
-  @@index([createdBy], map: "payments_created_by_fkey")
-  @@index([customerId], map: "payments_customer_id_fkey")
-  @@index([quotationId], map: "payments_quotation_id_fkey")
+  @@index([createdBy], map: "payments_created_by_idx")
+  @@index([customerId], map: "payments_customer_id_idx")
+  @@index([quotationId], map: "payments_quotation_id_idx")
   @@map("payments")
 }
 
@@ -469,7 +469,7 @@ model QuotationPassenger {
   createdAt   DateTime  @default(now()) @map("created_at")
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([quotationId], map: "quotation_passengers_quotation_id_fkey")
+  @@index([quotationId], map: "quotation_passengers_quotation_id_idx")
   @@map("quotation_passengers")
 }
 
