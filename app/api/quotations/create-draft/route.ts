@@ -40,12 +40,12 @@ export async function POST(req: Request) {
     const result = await prisma.$transaction(async (tx: any) => {
       // 1. Generate Quotation Number
       await tx.$executeRaw`
-        INSERT INTO system_sequences (\`key\`, last_seq, prefix, updated_at) 
+        INSERT INTO system_sequences ("key", last_seq, prefix, updated_at) 
         VALUES ('quotation_draft', 1, 'D', NOW()) 
-        ON DUPLICATE KEY UPDATE last_seq = last_seq + 1, updated_at = NOW();
+        ON CONFLICT ("key") DO UPDATE SET last_seq = system_sequences.last_seq + 1, updated_at = NOW();
       `;
 
-      const quotationSeqRes = await tx.$queryRaw`SELECT last_seq FROM system_sequences WHERE \`key\` = 'quotation_draft'`;
+      const quotationSeqRes = await tx.$queryRaw`SELECT last_seq FROM system_sequences WHERE "key" = 'quotation_draft'`;
       const quotationSeq = Number((quotationSeqRes as any)[0].last_seq);
       const quotationNumber = `D-${String(quotationSeq).padStart(4, '0')}`;
 
