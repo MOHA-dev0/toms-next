@@ -25,47 +25,71 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { referenceNumber: { contains: search, mode: 'insensitive' } },
+        { referenceNumber: { startsWith: search, mode: 'insensitive' } },
         { customer: { nameAr: { contains: search, mode: 'insensitive' } } },
         { destinationCity: { nameAr: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
     if (status !== 'all') {
-      if (status === 'unconfirmed') {
-        where.status = 'sent';
-      } else {
-        where.status = status;
+      where.status = status === 'unconfirmed' ? 'sent' : status;
+    }
+
+    // 1. Grouped Count (replacing 4 parallel full table count scans)
+    const statusAggregationsPromise = prisma.quotation.groupBy({
+      by: ['status'],
+      where: accessFilters,
+      _count: true,
+    });
+
+    // 2. Filtered Count for current pagination view
+    const filteredCountPromise = prisma.quotation.count({ where });
+
+    // 3. Thin List Projection. Instead of `include: {}` which pulls giant objects
+    // we strictly map only the columns needed by the frontend table.
+    const quotationsPromise = prisma.quotation.findMany({
+      where,
+      select: {
+        id: true,
+        referenceNumber: true,
+        startDate: true,
+        createdAt: true,
+        status: true,
+        adults: true,
+        children: true,
+        infants: true,
+        totalPrice: true,
+        paidAmount: true,
+        customer: { select: { nameAr: true } },
+        agent: { select: { nameEn: true } },
+        destinationCity: { select: { nameAr: true } },
+      },
+      orderBy: { updatedAt: 'desc' }, // Now utilizes Postgres @@index([updatedAt(sort: Desc)])
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const [statusAggregations, filteredCount, quotations] = await Promise.all([
+      statusAggregationsPromise,
+      filteredCountPromise,
+      quotationsPromise,
+    ]);
+
+    let totalCount = 0;
+    let draftCount = 0;
+    let unconfirmedCount = 0;
+    let confirmedCount = 0;
+
+    for (const agg of statusAggregations) {
+      totalCount += agg._count;
+      switch (agg.status) {
+        case 'draft': draftCount = agg._count; break;
+        case 'sent': unconfirmedCount = agg._count; break;
+        case 'confirmed': confirmedCount = agg._count; break;
       }
     }
 
-    const [
-      totalCount,
-      draftCount,
-      unconfirmedCount,
-      confirmedCount,
-      filteredCount,
-      quotations
-    ] = await Promise.all([
-      prisma.quotation.count({ where: accessFilters }),
-      prisma.quotation.count({ where: { ...accessFilters, status: 'draft' } }),
-      prisma.quotation.count({ where: { ...accessFilters, status: 'sent' } }),
-      prisma.quotation.count({ where: { ...accessFilters, status: 'confirmed' } }),
-      prisma.quotation.count({ where }),
-      prisma.quotation.findMany({
-        where,
-        include: {
-          customer: true,
-          destinationCity: true,
-          agent: true,
-        },
-        orderBy: { updatedAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      })
-    ]);
-
-    const formattedData = quotations.map(q => ({
+    const formattedData = quotations.map((q: any) => ({
       id: q.id,
       referenceNumber: q.referenceNumber,
       customerName: q.customer?.nameAr || 'غير محدد',

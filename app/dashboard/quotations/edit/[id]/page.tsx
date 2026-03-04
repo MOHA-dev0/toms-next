@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { getUserContext } from "@/lib/permissions";
 import prisma from "@/lib/prisma";
 import QuotationEditClient from "./QuotationEditClient";
+import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query';
+import { getServices, getServiceProviders, getQuotationReferenceData, getHotelsByCity } from '@/app/actions/quotation-actions';
 
 export default async function EditQuotationPage({ params }: { params: Promise<{ id: string }> }) {
   const userContext = await getUserContext();
@@ -217,5 +219,16 @@ export default async function EditQuotationPage({ params }: { params: Promise<{ 
     },
   };
 
-  return <QuotationEditClient initialState={mappedState} quotationStatus={quotationBase.status} />;
+  // Prefetch ONLY Step 1 data synchronously to ensure instant UX.
+  const queryClient = new QueryClient();
+  await queryClient.prefetchQuery({ queryKey: ['quotationReferenceData'], queryFn: getQuotationReferenceData });
+
+  // Do NOT block on hotels, services, or providers.
+  // They will be pre-fetched in the background via QuotationWizard on the client.
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <QuotationEditClient initialState={mappedState} quotationStatus={quotationBase.status} />
+    </HydrationBoundary>
+  );
 }

@@ -7,7 +7,7 @@ import { Plus, Trash2, Hotel, Coins, RefreshCw, AlertTriangle, Info } from "luci
 import { toast } from "sonner";
 import { HotelSegment } from "@/lib/store/quotationStore";
 import { DatePicker } from "@/components/ui/date-picker";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 
 // ── Helper: fetch exchange rate from API ──────────────────────────────
 async function fetchRate(from: string, to: string = 'USD'): Promise<{ rate: number; source: string } | null> {
@@ -105,39 +105,39 @@ function ManualRateInput({
 // ══════════════════════════════════════════════════════════════════════
 export default function StepHotels() {
   const { basicInfo, hotelSegments, addHotelSegment, updateHotelSegment, removeHotelSegment } = useQuotationStore();
-  const [cities, setCities] = useState<{ id: string; nameAr: string }[]>([]);
-  const [hotelsByCity, setHotelsByCity] = useState<Record<string, any[]>>({});
-  const [loadingCity, setLoadingCity] = useState<string | null>(null);
+  
   // Track segments needing manual rate entry (API failure fallback)
   const [manualRateNeeded, setManualRateNeeded] = useState<Record<string, { price: number; currency: string }>>({});
   const [convertingSegments, setConvertingSegments] = useState<Set<string>>(new Set());
 
   const { data: qData } = useQuery({
     queryKey: ['quotationReferenceData'],
-    queryFn: () => getQuotationReferenceData(),
-    staleTime: 5 * 60 * 1000,
+    queryFn: getQuotationReferenceData,
+    staleTime: Infinity,
+  });
+  const cities = qData?.cities || [];
+
+  // Safely grab requested cities from cached dehydrated React Query instance
+  const cityIdsString = hotelSegments.map(s => s.cityId).join(',');
+  const uniqueCityIds = Array.from(new Set(cityIdsString.split(',').filter(Boolean)));
+
+  const hotelQueries = useQueries({
+    queries: uniqueCityIds.map(cityId => ({
+      queryKey: ['hotels', cityId],
+      queryFn: () => getHotelsByCity(cityId),
+      staleTime: Infinity,
+    }))
   });
 
-  useEffect(() => {
-    if (qData?.cities) {
-      setCities(qData.cities);
-    }
-  }, [qData]);
+  const hotelsByCity = uniqueCityIds.reduce((acc, cityId, index) => {
+    acc[cityId] = hotelQueries[index].data || [];
+    return acc;
+  }, {} as Record<string, any[]>);
 
-  // Pre-load hotels for existing segments
-  const cityIdsString = hotelSegments.map(s => s.cityId).join(',');
-  useEffect(() => {
-    const uniqueCityIds = Array.from(new Set(cityIdsString.split(',').filter(Boolean)));
-    uniqueCityIds.forEach(cityId => {
-      setHotelsByCity(prev => {
-        if (prev[cityId]) return prev;
-        getHotelsByCity(cityId).then(hotels => {
-          setHotelsByCity(current => ({ ...current, [cityId]: hotels }));
-        }).catch(err => console.error("Failed to load hotels for city", cityId, err));
-        return { ...prev, [cityId]: [] };
-      });
-    });
-  }, [cityIdsString]);
+  const isCityLoading = (cityId: string) => {
+     const queryIndex = uniqueCityIds.indexOf(cityId);
+     return queryIndex !== -1 ? hotelQueries[queryIndex].isPending : false;
+  };
 
   useEffect(() => {
     const liveState = useQuotationStore.getState();
@@ -196,19 +196,8 @@ export default function StepHotels() {
     });
   }, [basicInfo.startDate, basicInfo.endDate, hotelSegments, updateHotelSegment]);
 
-  const handleCityChange = async (segmentId: string, cityId: string) => {
+  const handleCityChange = (segmentId: string, cityId: string) => {
     updateHotelSegment(segmentId, { cityId, hotelId: "", roomTypeId: "" });
-    if (cityId && !hotelsByCity[cityId]) {
-      setLoadingCity(cityId);
-      try {
-        const hotels = await getHotelsByCity(cityId);
-        setHotelsByCity((prev) => ({ ...prev, [cityId]: hotels }));
-      } catch {
-        toast.error("فشل في تحميل الفنادق");
-      } finally {
-        setLoadingCity(null);
-      }
-    }
   };
 
   /**
@@ -468,7 +457,7 @@ export default function StepHotels() {
                   onChange={(e) => handlePriceUpdate(segment.id, { hotelId: e.target.value, roomTypeId: "" }, segment)}
                   disabled={!segment.cityId}
                 >
-                  <option value="">{loadingCity === segment.cityId ? "جاري التحميل..." : "اختر الفندق..."}</option>
+                  <option value="">{isCityLoading(segment.cityId) ? "جاري التحميل..." : "اختر الفندق..."}</option>
                   {cityHotels.map(h => (
                     <option key={h.id} value={h.id}>{h.nameAr}</option>
                   ))}

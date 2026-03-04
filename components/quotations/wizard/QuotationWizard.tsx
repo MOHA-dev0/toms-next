@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuotationStore } from "@/lib/store/quotationStore";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import StepBasicInfo from "./steps/StepBasicInfo";
 import StepHotels from "./steps/StepHotels";
 import StepServices from "./steps/StepServices";
@@ -40,6 +40,21 @@ export default function QuotationWizard({ isEditMode, existingStatus }: Quotatio
   const queryClient = useQueryClient();
   const state = useQuotationStore();
   const { basicInfo, setBasicInfo, reset } = state;
+
+  useEffect(() => {
+    // 🚀 Background Prefetching (Zero UI blocking execution)
+    // Instantly begins downloading Step 3 & Step 4 resources without freezing Step 1
+    const { getServices, getServiceProviders, getHotelsByCity } = require("@/app/actions/quotation-actions");
+
+    queryClient.prefetchQuery({ queryKey: ['services'], queryFn: getServices, staleTime: Infinity });
+    queryClient.prefetchQuery({ queryKey: ['providers'], queryFn: getServiceProviders, staleTime: Infinity });
+
+    // Fetch hotels corresponding to existing city segments seamlessly
+    const hotelCityIds = Array.from(new Set(state.hotelSegments.map(h => h.cityId).filter(Boolean)));
+    hotelCityIds.forEach(cityId => {
+      queryClient.prefetchQuery({ queryKey: ['hotels', cityId], queryFn: () => getHotelsByCity(cityId), staleTime: Infinity });
+    });
+  }, [queryClient, state.hotelSegments]);
 
   const proceedWithFinalize = async (rebalanceMode: 'update_total' | 'rebalance_internally') => {
     setDialogType('none');
