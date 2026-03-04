@@ -373,7 +373,7 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
                             <SelectContent>
                               {globalRoomTypes.map((type: any) => (
                                 <SelectItem key={type.id} value={type.nameEn}>
-                                  {type.nameEn} {type.nameAr && `(${type.nameAr})`}
+                                  {type.nameAr || type.nameEn}
                                 </SelectItem>
                               ))}
                             </SelectContent>
