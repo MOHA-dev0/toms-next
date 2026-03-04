@@ -20,6 +20,7 @@ export async function PUT(
       data: {
         name: validatedData.name,
       },
+      select: { id: true, name: true }
     });
 
     return NextResponse.json(provider);

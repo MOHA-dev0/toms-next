@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, BedDouble } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,16 +36,33 @@ export function RoomTypesManager() {
   const [currentType, setCurrentType] = useState<RoomType | null>(null);
   const [deleteType, setDeleteType] = useState<RoomType | null>(null);
   const [formData, setFormData] = useState({ nameAr: '', nameEn: '' });
+  
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   const queryClient = useQueryClient();
 
-  // Fetch Room Types
-  const { data: roomTypes = [], isLoading } = useQuery({
-    queryKey: ['globalRoomTypes'],
+  // Debounce the search input (500ms delay before fetching)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch Room Types (CACHE-FIRST)
+  // We use the search string in the queryKey so React Query knows to refetch when it changes
+  const { data: roomTypes = [], isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['globalRoomTypes', debouncedSearch],
     queryFn: async () => {
-      const res: any = await api.get('/api/room-types');
+      const res: any = await api.get(`/api/room-types?search=${encodeURIComponent(debouncedSearch)}`);
       return Array.isArray(res) ? res : [];
-    }
+    },
+    // Server data rarely changes. Store immediately and use from memory globally.
+    staleTime: Infinity,
+    // Keep showing old data and apply low opacity while waiting for search results
+    placeholderData: (previousData) => previousData,
   });
 
   const mutation = useMutation({
@@ -57,6 +74,9 @@ export function RoomTypesManager() {
       }
     },
     onSuccess: () => {
+      // Cross-Component Sync: 
+      // Invalidating here instantly tells any other component using ['globalRoomTypes'] (like HotelForm)
+      // to refetch in the background, updating dropdowns seamlessly without full page reloads.
       queryClient.invalidateQueries({ queryKey: ['globalRoomTypes'] });
       toast.success(currentType ? 'تم التحديث بنجاح' : 'تم الإضافة بنجاح');
       setIsModalOpen(false);
@@ -72,13 +92,33 @@ export function RoomTypesManager() {
     mutationFn: async (id: string) => {
       return api.delete(`/api/room-types/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['globalRoomTypes'] });
-      toast.success('تم الحذف بنجاح');
-      setDeleteType(null);
+    onMutate: async (deletedId) => {
+      // OPTIMISTIC UI: Instantly remove the row for immediate feedback
+      await queryClient.cancelQueries({ queryKey: ['globalRoomTypes'] });
+      const previousRoomTypes = queryClient.getQueryData<RoomType[]>(['globalRoomTypes']);
+      
+      if (previousRoomTypes) {
+        queryClient.setQueryData<RoomType[]>(
+          ['globalRoomTypes'],
+          previousRoomTypes.filter((type) => type.id !== deletedId)
+        );
+      }
+      return { previousRoomTypes };
     },
-    onError: () => {
-      toast.error('حدث خطأ أثناء الحذف');
+    onError: (err, deletedId, context) => {
+      // ROLLBACK: If DB rejects delete (e.g. Foreign Key lock), instantly restore UI
+      if (context?.previousRoomTypes) {
+        queryClient.setQueryData(['globalRoomTypes'], context.previousRoomTypes);
+      }
+      toast.error('لا يمكن حذف هذا النوع. قد يكون مرتبطاً بفنادق.');
+    },
+    onSuccess: () => {
+      toast.success('تم الحذف بنجاح');
+    },
+    onSettled: () => {
+      // Always sync with the server eventually
+      queryClient.invalidateQueries({ queryKey: ['globalRoomTypes'] });
+      setDeleteType(null);
     }
   });
 
@@ -106,7 +146,14 @@ export function RoomTypesManager() {
           <h2 className="text-2xl font-bold text-gray-900">أنواع الغرف</h2>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          <Input 
+            type="search"
+            placeholder="بحث بالاسم..."
+            className="w-full sm:w-64 text-right"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
           <Button 
             onClick={() => handleOpenModal()} 
             className="gap-2 bg-blue-900 hover:bg-blue-800 shadow-md transition-all hover:shadow-lg w-full md:w-auto"
@@ -118,7 +165,7 @@ export function RoomTypesManager() {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-opacity duration-300 ${isPlaceholderData ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
         <Table>
           <TableHeader className="bg-gray-50/80">
             <TableRow>

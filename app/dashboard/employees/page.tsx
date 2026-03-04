@@ -1,7 +1,8 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, UserPlus, Mail, Phone, Shield, Search, Loader2, CheckCircle2, Clock, Trash2, User } from 'lucide-react'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -51,11 +52,8 @@ interface Invitation {
 }
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [invitations, setInvitations] = useState<Invitation[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   
   const [formData, setFormData] = useState({
@@ -68,40 +66,29 @@ export default function EmployeesPage() {
 
   const { toast } = useToast()
 
-  const fetchData = async () => {
-    setIsLoading(true)
-    try {
-      const [empData, invData] = await Promise.all([
-        api.get('/api/employees'),
-        api.get('/api/employees/invitations')
-      ])
-      setEmployees(empData)
-      setInvitations(invData)
-    } catch (error) {
-      console.error('Failed to fetch data', error)
-      toast({ 
-        title: 'خطأ',
-        description: 'فشل تحميل البيانات',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // 1. DATA FETCHING: SINGLE TRANSACTION QUERY (CACHE-FIRST)
+  const { data, isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const res = await api.get('/api/employees')
+      return res as { employees: Employee[], invitations: Invitation[] }
+    },
+    staleTime: Infinity // Reference data global memory persistence
+  })
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const employees = data?.employees || []
+  const invitations = data?.invitations || []
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    try {
-      await api.post('/api/employees/invite', formData)
+  // 2. MUTATIONS: INVITE EMPLOYEE
+  const inviteMutation = useMutation({
+    mutationFn: async (payload: typeof formData) => {
+      await api.post('/api/employees/invite', payload)
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
       toast({ 
         title: 'تم إرسال الدعوة',
-        description: `تم إرسال دعوة بنجاح إلى ${formData.email}`
+        description: `تم إرسال دعوة بنجاح إلى ${variables.email}`
       })
       setIsInviteModalOpen(false)
       setFormData({
@@ -111,16 +98,19 @@ export default function EmployeesPage() {
         initial: '',
         role: 'sales',
       })
-      fetchData()
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       toast({ 
         title: 'فشل إرسال الدعوة',
         description: error.message || 'حدث خطأ ما',
         variant: 'destructive'
       })
-    } finally {
-      setIsSubmitting(false)
     }
+  })
+
+  const handleInvite = (e: React.FormEvent) => {
+    e.preventDefault()
+    inviteMutation.mutate(formData)
   }
 
   const filteredEmployees = employees.filter(emp => 
@@ -165,7 +155,7 @@ export default function EmployeesPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="employees" className="mt-0">
+        <TabsContent value="employees" className={`mt-0 transition-opacity duration-300 ${isPlaceholderData ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {isLoading ? (
               Array(6).fill(0).map((_, i) => (
@@ -213,7 +203,7 @@ export default function EmployeesPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="invitations" className="mt-0">
+        <TabsContent value="invitations" className={`mt-0 transition-opacity duration-300 ${isPlaceholderData ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {isLoading ? (
               Array(3).fill(0).map((_, i) => (
@@ -339,10 +329,10 @@ export default function EmployeesPage() {
             <DialogFooter className="gap-3 sm:justify-start">
               <Button 
                 type="submit" 
-                disabled={isSubmitting} 
+                disabled={inviteMutation.isPending} 
                 className="bg-blue-900 hover:bg-blue-800 h-12 flex-1 rounded-xl"
               >
-                {isSubmitting ? (
+                {inviteMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin ml-2" />
                     جاري إرسال الدعوة...

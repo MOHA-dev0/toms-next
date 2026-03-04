@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,10 +34,9 @@ interface City {
 }
 
 export default function CitiesPage() {
-  const [cities, setCities] = useState<City[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
+
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentCity, setCurrentCity] = useState<City | null>(null)
   const [deleteCity, setDeleteCity] = useState<City | null>(null)
   
@@ -49,25 +49,79 @@ export default function CitiesPage() {
 
   const { toast } = useToast()
 
-  const fetchCities = async () => {
-    try {
+  // 1. DATA FETCHING: CACHE-FIRST
+  // cities rarely change, so staleTime is Infinity
+  const { data: cities = [], isLoading } = useQuery({
+    queryKey: ['cities'],
+    queryFn: async () => {
       const data = await api.get('/api/cities')
-      setCities(data)
-    } catch (error) {
-      console.error('Failed to fetch cities', error)
+      return data
+    },
+    staleTime: Infinity,
+  })
+
+  // 2. MUTATIONS: CREATE & UPDATE
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id?: string, payload: any }) => {
+      if (id) {
+        return api.put(`/api/cities/${id}`, payload)
+      } else {
+        return api.post('/api/cities', payload)
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['cities'] })
+      toast({ title: variables.id ? 'تم التحديث بنجاح' : 'تم الإضافة بنجاح' })
+      setIsModalOpen(false)
+    },
+    onError: (error) => {
+      console.error(error)
       toast({ 
         title: 'خطأ',
-        description: 'فشل تحميل قائمة المدن',
+        description: 'حدث خطأ أثناء الحفظ',
         variant: 'destructive'
       })
-    } finally {
-      setIsLoading(false)
     }
-  }
+  })
 
-  useEffect(() => {
-    fetchCities()
-  }, [])
+  // 3. MUTATIONS: DELETE WITH OPTIMISTIC UPDATES
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/cities/${id}`)
+    },
+    onMutate: async (deletedId) => {
+      // Optimistic Update: cancel outgoing queries and remove item from cache locally
+      await queryClient.cancelQueries({ queryKey: ['cities'] })
+      const previousCities = queryClient.getQueryData<City[]>(['cities'])
+      
+      if (previousCities) {
+        queryClient.setQueryData<City[]>(
+          ['cities'], 
+          previousCities.filter(c => c.id !== deletedId)
+        )
+      }
+      return { previousCities }
+    },
+    onError: (err, deletedId, context) => {
+      // Revert if API fails
+      if (context?.previousCities) {
+        queryClient.setQueryData(['cities'], context.previousCities)
+      }
+      console.error(err)
+      toast({ 
+        title: 'فشل الحذف',
+        description: 'لا يمكن حذف هذه المدينة لأنها مرتبطة بسجلات أخرى.',
+        variant: 'destructive'
+      })
+    },
+    onSuccess: () => {
+      toast({ title: 'تم الحذف بنجاح' })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['cities'] })
+      setDeleteCity(null)
+    }
+  })
 
   const handleOpenModal = (city?: City) => {
     if (city) {
@@ -90,60 +144,24 @@ export default function CitiesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
 
     // Capitalize first letter of Turkish name if it exists
     const formattedNameTr = formData.nameTr 
       ? formData.nameTr.charAt(0).toUpperCase() + formData.nameTr.slice(1) 
       : formData.nameTr
 
-    try {
-      if (currentCity) {
-        await api.put(`/api/cities/${currentCity.id}`, {
-          name_ar: formData.nameAr,
-          name_tr: formattedNameTr,
-          country_ar: formData.countryAr
-        })
-        toast({ title: 'تم التحديث بنجاح' })
-      } else {
-        await api.post('/api/cities', {
-          name_ar: formData.nameAr,
-          name_tr: formattedNameTr,
-          country_ar: formData.countryAr
-        })
-        toast({ title: 'تم الإضافة بنجاح' })
-      }
-      setIsModalOpen(false)
-      fetchCities()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'خطأ',
-        description: 'حدث خطأ أثناء الحفظ',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsSubmitting(false)
+    const payload = {
+      name_ar: formData.nameAr,
+      name_tr: formattedNameTr,
+      country_ar: formData.countryAr
     }
+
+    saveMutation.mutate({ id: currentCity?.id, payload })
   }
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!deleteCity) return
-
-    try {
-      await api.delete(`/api/cities/${deleteCity.id}`)
-      toast({ title: 'تم الحذف بنجاح' })
-      fetchCities()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'فشل الحذف',
-        description: 'لا يمكن حذف هذه المدينة لأنها مرتبطة بسجلات أخرى (فنادق، خدمات، أو عروض).',
-        variant: 'destructive'
-      })
-    } finally {
-      setDeleteCity(null)
-    }
+    deleteMutation.mutate(deleteCity.id)
   }
 
   return (
@@ -186,7 +204,7 @@ export default function CitiesPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              cities.map((city) => (
+              cities.map((city: City) => (
                 <TableRow key={city.id} className="hover:bg-gray-50 border-b border-gray-50 transition-colors">
                   <TableCell className="font-semibold text-gray-900 whitespace-nowrap py-4">{city.nameAr}</TableCell>
                   <TableCell className="text-gray-600 whitespace-nowrap py-4">{city.nameTr || '-'}</TableCell>
@@ -255,8 +273,8 @@ export default function CitiesPage() {
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 إلغاء
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-900 hover:bg-blue-800">
-                {isSubmitting ? 'جاري الحفظ...' : 'حفظ'}
+              <Button type="submit" disabled={saveMutation.isPending} className="bg-blue-900 hover:bg-blue-800">
+                {saveMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
               </Button>
             </DialogFooter>
           </form>

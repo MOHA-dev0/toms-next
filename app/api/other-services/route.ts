@@ -15,6 +15,15 @@ const otherServiceSchema = z.object({
 export async function GET() {
   try {
     const services = await prisma.otherService.findMany({
+      select: {
+        id: true,
+        nameAr: true,
+        nameEn: true,
+        descriptionAr: true,
+        purchasePrice: true,
+        sellingPrice: true,
+        currency: true,
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -39,6 +48,7 @@ export async function POST(request: Request) {
         sellingPrice: validatedData.sellingPrice,
         currency: validatedData.currency,
       },
+      select: { id: true, nameAr: true }
     });
 
     return NextResponse.json(service);

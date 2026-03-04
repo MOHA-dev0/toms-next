@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Building, Search, FileUp, Download, BedDouble, LayoutGrid, List, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -39,42 +40,52 @@ interface Hotel {
 export default function HotelsPage() {
   const [activeTab, setActiveTab] = useState<'hotels' | 'room-types'>('hotels');
   
-  // Hotels State
-  const [hotels, setHotels] = useState<Hotel[]>([]);
-  const [cities, setCities] = useState<City[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  
+  // UI State
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentHotel, setCurrentHotel] = useState<any | null>(null);
   const [deleteHotel, setDeleteHotel] = useState<Hotel | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 9;
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const limit = 9;
   
   const { toast } = useToast();
 
-  const fetchData = async () => {
-    try {
-      const [hotelsData, citiesData] = await Promise.all([
-        api.get('/api/hotels'),
-        api.get('/api/cities')
-      ]);
-      setHotels(hotelsData);
-      setCities(citiesData);
-    } catch (error) {
-      console.error('Failed to fetch data', error);
-      toast({ 
-        title: 'خطأ',
-        description: 'فشل تحميل البيانات',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // 1. Debounce the search input to prevent firing an API call on every keystroke
   useEffect(() => {
-    fetchData();
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1); // Reset to page 1 whenever search changes
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // 2. CACHE-FIRST FETCHING
+  // Cities change rarely. staleTime: Infinity
+  const { data: cities = [] } = useQuery({
+    queryKey: ['cities'],
+    queryFn: async () => {
+      const res = await api.get('/api/cities');
+      return res;
+    },
+    staleTime: Infinity, 
+  });
+
+  // Hotels change occasionally. Request includes page and search.
+  const { data: hotelsData, isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['hotels', page, debouncedSearch],
+    queryFn: async () => {
+      const res = await api.get(`/api/hotels?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearch)}`);
+      return res;
+    },
+    placeholderData: (previousData) => previousData,
+    staleTime: 5 * 60 * 1000, 
+  });
+
+  const hotels = hotelsData?.data || [];
+  const totalPages = hotelsData?.totalPages || 0;
 
   const handleOpenForm = (hotel?: Hotel) => {
     if (hotel) {
@@ -102,41 +113,56 @@ export default function HotelsPage() {
     setDeleteHotel(hotel);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteHotel) return;
-
-    try {
-      await api.delete(`/api/hotels/${deleteHotel.id}`);
-      toast({ title: 'تم الحذف بنجاح' });
-      fetchData();
-    } catch (error) {
-      console.error(error);
+  // 2. MUTATION WITH CACHE INVALIDATION & OPTIMISTIC UPDATES
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/hotels/${id}`);
+    },
+    onMutate: async (deletedId) => {
+      // Optimistic Update: Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['hotels'] });
+      // Snapshot the previous value
+      const previousHotels = queryClient.getQueryData<Hotel[]>(['hotels']);
+      // Optimistically update to the new value
+      if (previousHotels) {
+        queryClient.setQueryData(['hotels'], previousHotels.filter(h => h.id !== deletedId));
+      }
+      return { previousHotels };
+    },
+    onError: (err, deletedId, context) => {
+      // Rollback on error
+      if (context?.previousHotels) {
+        queryClient.setQueryData(['hotels'], context.previousHotels);
+      }
+      console.error(err);
       toast({ 
         title: 'فشل الحذف',
         description: 'قد يكون الفندق مرتبط بحجوزات أو عروض أسعار.',
         variant: 'destructive'
       });
-    } finally {
+    },
+    onSuccess: () => {
+      toast({ title: 'تم الحذف بنجاح' });
+    },
+    onSettled: () => {
+      // Refetch after error or success to ensure server sync
+      queryClient.invalidateQueries({ queryKey: ['hotels'] });
       setDeleteHotel(null);
     }
+  });
+
+  const confirmDelete = () => {
+    if (!deleteHotel) return;
+    deleteMutation.mutate(deleteHotel.id);
   };
 
   const onFormSuccess = () => {
     setIsFormOpen(false);
-    fetchData();
+    // 3. CACHE INVALIDATION: Trigger background refetch on form submittion
+    queryClient.invalidateQueries({ queryKey: ['hotels'] });
   };
 
-  const filteredHotels = hotels.filter(hotel => 
-    hotel.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    hotel.city?.nameAr.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  const pageCount = Math.ceil(filteredHotels.length / ITEMS_PER_PAGE);
-  const currentHotels = filteredHotels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <div className="p-8 space-y-6">
@@ -214,13 +240,13 @@ export default function HotelsPage() {
                 <div key={i} className="h-48 bg-gray-100 rounded-xl" />
               ))}
             </div>
-          ) : filteredHotels.length === 0 ? (
+          ) : hotels.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-dashed text-muted-foreground">
               لا يوجد فنادق تطابق بحثك
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" dir="rtl">
-              {currentHotels.map((hotel) => (
+            <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-200", isPlaceholderData ? "opacity-50 pointer-events-none" : "opacity-100")} dir="rtl">
+              {hotels.map((hotel: Hotel) => (
                 <DataCard
                   key={hotel.id}
                   title={hotel.nameAr}
@@ -249,7 +275,7 @@ export default function HotelsPage() {
                   metadata={
                     <div className="space-y-2">
                        {hotel.roomTypes?.length > 0 ? (
-                         hotel.roomTypes.slice(0, 3).map((room, idx) => (
+                         hotel.roomTypes.slice(0, 3).map((room: RoomType, idx: number) => (
                            <div key={idx} className="flex justify-between items-center text-sm p-1.5 rounded-lg bg-gray-50/50 hover:bg-gray-50 transition-colors border border-gray-100">
                              <div className="flex items-center gap-2">
                                <Badge variant="outline" className="text-[10px] h-5 bg-white font-normal text-muted-foreground border-gray-200">
@@ -285,41 +311,42 @@ export default function HotelsPage() {
             </div>
           )}
 
-          {activeTab === 'hotels' && pageCount > 1 && !isLoading && currentHotels.length > 0 && (
+          {activeTab === 'hotels' && totalPages > 1 && !isLoading && hotels.length > 0 && (
             <div className="flex items-center justify-between px-6 py-4 mt-6 bg-white border border-gray-100 rounded-xl shadow-sm">
               <p className="text-sm font-medium text-gray-500">
-                عرض صفحة <span className="font-bold text-gray-700">{currentPage}</span> من <span className="font-bold text-gray-700">{pageCount}</span>
+                عرض صفحة <span className="font-bold text-gray-700">{page}</span> من <span className="font-bold text-gray-700">{totalPages}</span>
               </p>
               <div className="flex gap-1" dir="rtl">
                 <Button 
                   variant="outline" 
                   size="icon" 
                   className="h-8 w-8 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1 || isPlaceholderData}
                 >
                   <ChevronRight size={16} />
                 </Button>
                 
-                {Array.from({ length: pageCount }).map((_, idx) => {
+                {Array.from({ length: totalPages }).map((_, idx) => {
                   const pageNum = idx + 1;
-                  if (pageCount > 5 && Math.abs(currentPage - pageNum) > 1 && pageNum !== 1 && pageNum !== pageCount) {
-                    if (pageNum === 2 || pageNum === pageCount - 1) return <span key={pageNum} className="px-2 self-end text-gray-400">...</span>;
+                  if (totalPages > 5 && Math.abs(page - pageNum) > 1 && pageNum !== 1 && pageNum !== totalPages) {
+                    if (pageNum === 2 || pageNum === totalPages - 1) return <span key={pageNum} className="px-2 self-end text-gray-400">...</span>;
                     return null;
                   }
 
                   return (
                     <Button 
                       key={pageNum}
-                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      variant={page === pageNum ? 'default' : 'outline'}
                       size="sm"
                       className={cn(
                         "h-8 min-w-8 font-bold border-transparent transition-all",
-                        currentPage === pageNum 
+                        page === pageNum 
                           ? "bg-blue-900 text-white shadow-sm hover:bg-blue-800" 
                           : "bg-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200"
                       )}
-                      onClick={() => setCurrentPage(pageNum)}
+                      onClick={() => setPage(pageNum)}
+                      disabled={isPlaceholderData}
                     >
                       {pageNum}
                     </Button>
@@ -330,8 +357,8 @@ export default function HotelsPage() {
                   variant="outline" 
                   size="icon" 
                   className="h-8 w-8 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 hover:border-gray-200"
-                  onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
-                  disabled={currentPage === pageCount}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || isPlaceholderData}
                 >
                   <ChevronLeft size={16} />
                 </Button>

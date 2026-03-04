@@ -29,6 +29,7 @@ export async function PUT(
         nameEn: validatedData.nameEn,
         logoUrl: validatedData.logoUrl,
       },
+      select: { id: true, nameEn: true }
     });
 
     return NextResponse.json(agent);

@@ -147,21 +147,15 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
   const setOpen = isControlled ? (onOpenChange || (() => {})) : setInternalOpen;
 
   const { data: globalRoomTypes = [] } = useQuery({
-    queryKey: ['globalRoomTypes'],
+    queryKey: ['globalRoomTypes', ''], // Empty string to match the default empty search in RoomTypesManager
     queryFn: async () => {
-      const res = await api.get('/api/room-types');
-      // Helper to return data array if wrapped (api-client usually returns json directly, 
-      // but let's check. api-client returns response.json(). 
-      // The route returns array. So just return res.
-      // But queryFn expects `res.data` in the original code? 
-      // Original: `return res.data;` 
-      // My API returns straight JSON (array). 
-      // `api-client` returns `response.json()`.
-      // So `res` IS the array. 
-      // I should update the queryFn return too.
-      return res;
+      const res = await api.get('/api/room-types?search=');
+      return Array.isArray(res) ? res : [];
     },
-    enabled: !!open // Only fetch when form is open (bool cast)
+    staleTime: Infinity, // ZERO-REQUEST ARCHITECTURE: Read instantly from memory, never fetch again.
+    // We don't need `enabled: !!open` anymore because:
+    // 1. If it's already in the cache from RoomTypesManager, it returns instantly for free.
+    // 2. If it's not in the cache, we want to prefetch it so the dropdown is perfectly ready when opened.
   });
 
   const { register, control, handleSubmit, reset, formState: { errors } } = useForm<HotelFormValues>({
@@ -379,7 +373,7 @@ export function HotelForm({ cities, triggerButton, initialData, onSuccess, open:
                             <SelectContent>
                               {globalRoomTypes.map((type: any) => (
                                 <SelectItem key={type.id} value={type.nameEn}>
-                                  {type.nameEn}
+                                  {type.nameEn} {type.nameAr && `(${type.nameAr})`}
                                 </SelectItem>
                               ))}
                             </SelectContent>

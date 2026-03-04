@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api-client';
 import { Input } from '@/components/ui/input';
@@ -12,47 +12,84 @@ import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-di
 import { DataCard } from '@/components/ui/data-card';
 import { toast } from 'sonner';
 
+interface Service {
+  id: string;
+  nameAr: string;
+  nameEn?: string | null;
+  cityId: string;
+  purchasePrice: number;
+  currency: string;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
+  city?: { nameAr: string } | null;
+}
+
 export default function ServicesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingService, setEditingService] = useState<any>(null);
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
-  // Fetch Cities
+  // Fetch Cities (Reference Data - Infinity Cache)
   const { data: cities = [] } = useQuery({
     queryKey: ['cities'],
     queryFn: async () => {
       const res = await api.get('/api/cities');
       return Array.isArray(res) ? res : [];
-    }
+    },
+    staleTime: Infinity
   });
 
-  // Fetch Services
+  // Fetch Services (Fetch ONCE, Client-Side Filtered, ZERO-LATENCY)
   const { data: services = [], isLoading } = useQuery({
     queryKey: ['services'],
     queryFn: async () => {
       const res = await api.get('/api/services');
       return Array.isArray(res) ? res : [];
-    }
+    },
+    staleTime: Infinity // Keep in memory permanently
   });
+
+  // Client-Side Filtering (Instant rendering, 0ms delay)
+  const filteredServices = services.filter((service: Service) =>
+    service.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (service.nameEn && service.nameEn.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       return api.delete(`/api/services/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['services'] });
-      toast.success('تم حذف الخدمة بنجاح');
-      setDeleteId(null);
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ['services'] });
+      const previousServices = queryClient.getQueryData<Service[]>(['services']);
+      
+      if (previousServices) {
+        queryClient.setQueryData<Service[]>(
+          ['services'],
+          previousServices.filter(s => s.id !== deletedId)
+        );
+      }
+      return { previousServices };
     },
-    onError: () => {
-      toast.error('حدث خطأ أثناء الحذف');
+    onError: (err, deletedId, context) => {
+      if (context?.previousServices) {
+        queryClient.setQueryData(['services'], context.previousServices);
+      }
+      toast.error('حدث خطأ أثناء الحذف، قد تكون الخدمة مرتبطة بعروض سابقة.');
+    },
+    onSuccess: () => {
+      toast.success('تم حذف الخدمة بنجاح');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      setDeleteId(null);
     }
   });
 
-  const handleEdit = (service: any) => {
+  const handleEdit = (service: Service) => {
     setEditingService(service);
     setIsFormOpen(true);
   };
@@ -61,11 +98,7 @@ export default function ServicesPage() {
     setIsFormOpen(open);
     if (!open) setEditingService(null);
   };
-
-  const filteredServices = services.filter((service: any) =>
-    service.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (service.nameEn && service.nameEn.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  // No need for client filtering because it's now handled server-side!
 
   return (
     <div className="p-8 space-y-6 animate-in fade-in-50 duration-500">
@@ -88,7 +121,13 @@ export default function ServicesPage() {
             cities={cities} 
             open={isFormOpen} 
             onOpenChange={handleCloseForm}
-            initialData={editingService}
+            initialData={editingService ? {
+              ...editingService,
+              nameEn: editingService.nameEn || '',
+              descriptionAr: editingService.descriptionAr || '',
+              descriptionEn: editingService.descriptionEn || '',
+              purchasePrice: String(editingService.purchasePrice || '0'),
+            } : undefined}
           />
         </div>
       </div>
@@ -106,11 +145,11 @@ export default function ServicesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" dir="rtl">
-           {filteredServices.map((service: any) => (
+           {filteredServices.map((service: Service) => (
              <DataCard
                key={service.id}
                title={service.nameAr}
-               subtitle={service.nameEn}
+               subtitle={service.nameEn || undefined}
                icon={Map}
                actions={
                  <>

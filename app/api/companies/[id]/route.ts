@@ -21,6 +21,7 @@ export async function PUT(
       data: {
         nameEn: validatedData.name_en,
       },
+      select: { id: true, nameEn: true }
     });
 
     return NextResponse.json(company);

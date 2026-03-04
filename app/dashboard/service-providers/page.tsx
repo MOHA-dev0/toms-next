@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, Pencil, Trash2, Building2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,43 +28,101 @@ import api from '@/lib/api-client'
 interface ServiceProvider {
   id: string
   name: string
-  isActive: boolean
 }
 
 export default function ServiceProvidersPage() {
-  const [providers, setProviders] = useState<ServiceProvider[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
+
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentProvider, setCurrentProvider] = useState<ServiceProvider | null>(null)
   const [deleteProvider, setDeleteProvider] = useState<ServiceProvider | null>(null)
-  
-  // Form State
-  const [formData, setFormData] = useState({
-    name: ''
-  })
-
+  const [formData, setFormData] = useState({ name: '' })
   const { toast } = useToast()
 
-  const fetchProviders = async () => {
-    try {
-      const data = await api.get('/api/service-providers')
-      setProviders(data)
-    } catch (error) {
-      console.error('Failed to fetch service providers', error)
-      toast({ 
-        title: 'خطأ',
-        description: 'فشل تحميل قائمة مزودي الخدمات',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
   useEffect(() => {
-    fetchProviders()
-  }, [])
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // 1. DATA FETCHING: CACHE-FIRST
+  const { data: providers = [], isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['service-providers', debouncedSearch],
+    queryFn: async () => {
+      const data = await api.get(`/api/service-providers?search=${encodeURIComponent(debouncedSearch)}`)
+      return Array.isArray(data) ? data : []
+    },
+    staleTime: Infinity, // Reference data
+    placeholderData: (prev) => prev
+  })
+
+  // 2. MUTATIONS: CREATE & UPDATE
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id?: string, payload: any }) => {
+      if (id) {
+        return api.put(`/api/service-providers/${id}`, payload)
+      } else {
+        return api.post('/api/service-providers', payload)
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['service-providers'] })
+      toast({ title: variables.id ? 'تم التحديث بنجاح' : 'تم الإضافة بنجاح' })
+      setIsModalOpen(false)
+      setFormData({ name: '' })
+      setCurrentProvider(null)
+    },
+    onError: (error) => {
+      console.error(error)
+      toast({ 
+        title: 'خطأ',
+        description: 'حدث خطأ أثناء الحفظ',
+        variant: 'destructive'
+      })
+    }
+  })
+
+  // 3. MUTATIONS: DELETE WITH OPTIMISTIC UPDATES
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/service-providers/${id}`)
+    },
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ['service-providers'] })
+      const previous = queryClient.getQueryData<ServiceProvider[]>(['service-providers', debouncedSearch])
+      
+      if (previous) {
+        queryClient.setQueryData<ServiceProvider[]>(
+          ['service-providers', debouncedSearch], 
+          previous.filter(p => p.id !== deletedId)
+        )
+      }
+      return { previous }
+    },
+    onError: (err, deletedId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['service-providers', debouncedSearch], context.previous)
+      }
+      console.error(err)
+      toast({ 
+        title: 'فشل الحذف',
+        description: 'لا يمكن حذف مزود الخدمة لأنه مرتبط بسجلات أخرى.',
+        variant: 'destructive'
+      })
+    },
+    onSuccess: () => {
+      toast({ title: 'تم الحذف بنجاح' })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-providers'] })
+      setDeleteProvider(null)
+    }
+  })
 
   const handleOpenModal = (provider?: ServiceProvider) => {
     if (provider) {
@@ -80,53 +139,17 @@ export default function ServiceProvidersPage() {
     setIsModalOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
-
-    try {
-      if (currentProvider) {
-        await api.put(`/api/service-providers/${currentProvider.id}`, {
-          name: formData.name
-        })
-        toast({ title: 'تم التحديث بنجاح' })
-      } else {
-        await api.post('/api/service-providers', {
-          name: formData.name
-        })
-        toast({ title: 'تم الإضافة بنجاح' })
-      }
-      setIsModalOpen(false)
-      fetchProviders()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'خطأ',
-        description: 'حدث خطأ أثناء الحفظ',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+    saveMutation.mutate({ 
+      id: currentProvider?.id, 
+      payload: { name: formData.name } 
+    })
   }
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!deleteProvider) return
-
-    try {
-      await api.delete(`/api/service-providers/${deleteProvider.id}`)
-      toast({ title: 'تم الحذف بنجاح' })
-      fetchProviders()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'فشل الحذف',
-        description: 'لا يمكن حذف مزود الخدمة لأنه مرتبط بسجلات أخرى.',
-        variant: 'destructive'
-      })
-    } finally {
-      setDeleteProvider(null)
-    }
+    deleteMutation.mutate(deleteProvider.id)
   }
 
   return (
@@ -140,13 +163,26 @@ export default function ServiceProvidersPage() {
             </div>
           </div>
 
-          <Button onClick={() => handleOpenModal()} size="sm" className="gap-2 bg-blue-900 hover:bg-blue-800 shadow-sm transition-all hover:shadow-md h-8 text-xs px-3">
-            <Plus className="h-3.5 w-3.5" />
-            <span>إضافة مزود</span>
-          </Button>
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                className="pr-10 text-right w-full"
+                placeholder="بحث بالاسم..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            
+            <Button onClick={() => handleOpenModal()} size="sm" className="gap-2 bg-blue-900 hover:bg-blue-800 shadow-sm transition-all hover:shadow-md h-9 text-xs px-4 w-full sm:w-auto">
+              <Plus className="h-3.5 w-3.5" />
+              <span>إضافة مزود</span>
+            </Button>
+          </div>
         </div> 
 
-        <Table>
+        <div className={`transition-opacity duration-300 ${isPlaceholderData ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+          <Table>
           <TableHeader className="bg-gray-50">
             <TableRow>
               <TableHead className="text-right font-medium text-gray-500 py-4">اسم المزود</TableHead>
@@ -195,6 +231,7 @@ export default function ServiceProvidersPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -218,8 +255,8 @@ export default function ServiceProvidersPage() {
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 إلغاء
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-900 hover:bg-blue-800">
-                {isSubmitting ? 'جاري الحفظ...' : 'حفظ'}
+              <Button type="submit" disabled={saveMutation.isPending} className="bg-blue-900 hover:bg-blue-800">
+                {saveMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
               </Button>
             </DialogFooter>
           </form>

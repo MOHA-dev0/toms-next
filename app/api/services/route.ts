@@ -17,8 +17,14 @@ const serviceSchema = z.object({
 export async function GET() {
   try {
     const services = await prisma.service.findMany({
-      include: {
-        city: true,
+      select: {
+        id: true,
+        nameAr: true,
+        nameEn: true,
+        cityId: true,
+        purchasePrice: true,
+        currency: true,
+        city: { select: { nameAr: true } } // Lean targeting: avoid pulling full city row
       },
       orderBy: {
         createdAt: 'desc',
@@ -45,6 +51,7 @@ export async function POST(request: Request) {
         descriptionAr: validatedData.descriptionAr,
         descriptionEn: validatedData.descriptionEn,
       },
+      select: { id: true, nameAr: true } // Return minimum payload footprint after creation
     });
 
     return NextResponse.json(service);
