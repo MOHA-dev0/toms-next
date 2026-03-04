@@ -18,8 +18,9 @@ export async function getUserContext(): Promise<UserContext | null> {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: {
-      userRoles: true,
+    select: {
+      id: true,
+      userRoles: { select: { role: true } },
       employee: true,
     },
   });

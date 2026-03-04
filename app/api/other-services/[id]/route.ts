@@ -31,6 +31,7 @@ export async function PUT(
         sellingPrice: validatedData.sellingPrice,
         currency: validatedData.currency,
       },
+      select: { id: true, nameAr: true }
     });
 
     return NextResponse.json(service);

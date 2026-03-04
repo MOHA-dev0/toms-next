@@ -15,9 +15,9 @@ export async function getQuotations(options?: QuotationListOptions) {
 
   if (search) {
     where.OR = [
-      { referenceNumber: { contains: search } },
-      { customer: { nameAr: { contains: search } } },
-      { destinationCity: { nameAr: { contains: search } } },
+      { referenceNumber: { contains: search, mode: 'insensitive' } },
+      { customer: { nameAr: { contains: search, mode: 'insensitive' } } },
+      { destinationCity: { nameAr: { contains: search, mode: 'insensitive' } } },
     ];
   }
 

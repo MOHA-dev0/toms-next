@@ -10,6 +10,10 @@ const companySchema = z.object({
 export async function GET() {
   try {
     const companies = await prisma.company.findMany({
+      select: {
+        id: true,
+        nameEn: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json(companies);
@@ -27,6 +31,7 @@ export async function POST(request: Request) {
       data: {
         nameEn: validatedData.name_en,
       },
+      select: { id: true, nameEn: true }
     });
 
     return NextResponse.json(company);

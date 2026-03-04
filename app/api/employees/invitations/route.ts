@@ -11,6 +11,15 @@ export async function GET() {
     }
 
     const invitations = await prisma.employeeInvitation.findMany({
+      select: {
+        id: true,
+        email: true,
+        nameAr: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
 

@@ -17,6 +17,11 @@ export async function GET() {
     }
 
     const agents = await prisma.agent.findMany({
+      select: {
+        id: true,
+        nameEn: true,
+        logoUrl: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json(agents);
@@ -40,6 +45,7 @@ export async function POST(request: Request) {
         nameEn: validatedData.nameEn,
         logoUrl: validatedData.logoUrl,
       },
+      select: { id: true, nameEn: true }
     });
 
     return NextResponse.json(agent);

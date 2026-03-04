@@ -1,7 +1,8 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,43 +29,89 @@ import api from '@/lib/api-client'
 interface Company {
   id: string
   nameEn: string
-  isActive: boolean
 }
 
 export default function CompaniesPage() {
-  const [companies, setCompanies] = useState<Company[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null)
   const [deleteCompany, setDeleteCompany] = useState<Company | null>(null)
-  
-  // Form State
-  const [formData, setFormData] = useState({
-    nameEn: ''
-  })
-
+  const [formData, setFormData] = useState({ nameEn: '' })
   const { toast } = useToast()
 
-  const fetchCompanies = async () => {
-    try {
+  // 1. DATA FETCHING: CACHE-FIRST
+  const { data: companies = [], isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['companies'],
+    queryFn: async () => {
       const data = await api.get('/api/companies')
-      setCompanies(data)
-    } catch (error) {
-      console.error('Failed to fetch companies', error)
+      return Array.isArray(data) ? data : []
+    },
+    staleTime: Infinity, // Reference data: stays in RAM instantly!
+    placeholderData: (prev) => prev
+  })
+
+  // 2. MUTATIONS: CREATE & UPDATE
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id?: string, payload: any }) => {
+      if (id) {
+        return api.put(`/api/companies/${id}`, payload)
+      } else {
+        return api.post('/api/companies', payload)
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] })
+      toast({ title: variables.id ? 'تم التحديث بنجاح' : 'تم الإضافة بنجاح' })
+      setIsModalOpen(false)
+      setFormData({ nameEn: '' })
+      setCurrentCompany(null)
+    },
+    onError: (error) => {
+      console.error(error)
       toast({ 
         title: 'خطأ',
-        description: 'فشل تحميل قائمة الشركات',
+        description: 'حدث خطأ أثناء الحفظ',
         variant: 'destructive'
       })
-    } finally {
-      setIsLoading(false)
     }
-  }
+  })
 
-  useEffect(() => {
-    fetchCompanies()
-  }, [])
+  // 3. MUTATIONS: DELETE WITH OPTIMISTIC UPDATES
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/companies/${id}`)
+    },
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ['companies'] })
+      const previous = queryClient.getQueryData<Company[]>(['companies'])
+      
+      if (previous) {
+        queryClient.setQueryData<Company[]>(
+          ['companies'], 
+          previous.filter(c => c.id !== deletedId)
+        )
+      }
+      return { previous }
+    },
+    onError: (err, deletedId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['companies'], context.previous)
+      }
+      console.error(err)
+      toast({ 
+        title: 'فشل الحذف',
+        description: 'لا يمكن حذف هذه الشركة لأنها مرتبطة بسجلات أخرى.',
+        variant: 'destructive'
+      })
+    },
+    onSuccess: () => {
+      toast({ title: 'تم الحذف بنجاح' })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] })
+      setDeleteCompany(null)
+    }
+  })
 
   const handleOpenModal = (company?: Company) => {
     if (company) {
@@ -81,53 +128,17 @@ export default function CompaniesPage() {
     setIsModalOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
-
-    try {
-      if (currentCompany) {
-        await api.put(`/api/companies/${currentCompany.id}`, {
-          name_en: formData.nameEn
-        })
-        toast({ title: 'تم التحديث بنجاح' })
-      } else {
-        await api.post('/api/companies', {
-          name_en: formData.nameEn
-        })
-        toast({ title: 'تم الإضافة بنجاح' })
-      }
-      setIsModalOpen(false)
-      fetchCompanies()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'خطأ',
-        description: 'حدث خطأ أثناء الحفظ',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+    saveMutation.mutate({ 
+      id: currentCompany?.id, 
+      payload: { name_en: formData.nameEn } 
+    })
   }
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!deleteCompany) return
-
-    try {
-      await api.delete(`/api/companies/${deleteCompany.id}`)
-      toast({ title: 'تم الحذف بنجاح' })
-      fetchCompanies()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'فشل الحذف',
-        description: 'لا يمكن حذف هذه الشركة لأنها مرتبطة بسجلات أخرى.',
-        variant: 'destructive'
-      })
-    } finally {
-      setDeleteCompany(null)
-    }
+    deleteMutation.mutate(deleteCompany.id)
   }
 
   return (
@@ -147,7 +158,8 @@ export default function CompaniesPage() {
           </Button>
         </div> 
 
-        <Table>
+        <div className={`transition-opacity duration-300 ${isPlaceholderData ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+          <Table>
           <TableHeader className="bg-gray-50">
             <TableRow>
               <TableHead className="text-right font-medium text-gray-500 py-4">اسم الشركة (إنجليزي)</TableHead>
@@ -196,6 +208,7 @@ export default function CompaniesPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -221,8 +234,8 @@ export default function CompaniesPage() {
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 إلغاء
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-900 hover:bg-blue-800">
-                {isSubmitting ? 'جاري الحفظ...' : 'حفظ'}
+              <Button type="submit" disabled={saveMutation.isPending} className="bg-blue-900 hover:bg-blue-800">
+                {saveMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
               </Button>
             </DialogFooter>
           </form>

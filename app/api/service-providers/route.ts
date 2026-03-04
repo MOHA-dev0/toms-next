@@ -6,9 +6,22 @@ const serviceProviderSchema = z.object({
   name: z.string().min(1, 'Name is required'),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search') || '';
+
+    const whereClause: any = {};
+    if (search) {
+      whereClause.name = { contains: search, mode: 'insensitive' };
+    }
+
     const providers = await prisma.serviceProvider.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+      },
       orderBy: {
         createdAt: 'desc',
       },
@@ -28,6 +41,7 @@ export async function POST(request: Request) {
       data: {
         name: validatedData.name,
       },
+      select: { id: true, name: true }
     });
 
     return NextResponse.json(provider);

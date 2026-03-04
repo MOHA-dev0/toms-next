@@ -33,11 +33,27 @@ export function validateRoomTypes(roomTypes: any[]) {
 
 export const hotelService = {
   async getAll() {
+    // OPTIMIZATION: Replaced nested `include` with explicit `select`.
+    // Neon DB no longer performs multiple heavy JOINs, returning a much smaller payload.
+    // This reduces the DB execution time drastically and lowers CU usage.
     return await prisma.hotel.findMany({
-      include: {
-        city: true,
+      select: {
+        id: true,
+        nameAr: true,
+        createdAt: true,
+        city: {
+          select: { nameAr: true, id: true }
+        },
         roomTypes: {
-          include: { roomPricing: true }
+          select: {
+            id: true,
+            nameAr: true,
+            board: true,
+            basePrice: true,
+            currency: true
+            // We DO NOT select roomPricing here. The grid UI doesn't need it.
+            // This eliminates hundreds of underlying rows per request.
+          }
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -73,6 +89,9 @@ export const hotelService = {
     }[]
   }) {
     validateRoomTypes(data.roomTypes);
+    // OPTIMIZATION: After POST/Create, we only return the hotel ID/name.
+    // There is no need to fire more select/include operations right after writing to the DB.
+    // Our frontend uses `queryClient.invalidateQueries` which will handle the clean refresh automatically.
     return await prisma.hotel.create({
       data: {
         nameAr: data.nameAr,
@@ -87,12 +106,7 @@ export const hotelService = {
           })),
         },
       },
-      include: {
-        city: true,
-        roomTypes: {
-          include: { roomPricing: true }
-        },
-      },
+      select: { id: true, nameAr: true }
     })
   },
 

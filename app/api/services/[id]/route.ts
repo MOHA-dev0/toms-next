@@ -33,6 +33,7 @@ export async function PUT(
         descriptionAr: validatedData.descriptionAr,
         descriptionEn: validatedData.descriptionEn,
       },
+      select: { id: true, nameAr: true } // Lean targeting for UI cache invalidation
     });
 
     return NextResponse.json(service);

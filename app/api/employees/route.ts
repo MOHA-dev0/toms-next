@@ -10,20 +10,44 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const employees = await prisma.employee.findMany({
-      include: {
-        user: {
-          include: {
-            userRoles: true
+    const [employees, invitations] = await prisma.$transaction([
+      prisma.employee.findMany({
+        select: {
+          id: true,
+          nameAr: true,
+          email: true,
+          phone: true,
+          initial: true,
+          isActive: true,
+          user: {
+            select: {
+              userRoles: {
+                select: {
+                  role: true
+                }
+              }
+            }
           }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.employeeInvitation.findMany({
+        select: {
+          id: true,
+          email: true,
+          nameAr: true,
+          role: true,
+          status: true,
+          expiresAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    ]);
 
-    return NextResponse.json(employees);
+    return NextResponse.json({ employees, invitations });
   } catch (error) {
-    console.error('Fetch employees error:', error);
-    return NextResponse.json({ error: 'Failed to fetch employees' }, { status: 500 });
+    console.error('Fetch employees and invitations error:', error);
+    return NextResponse.json({ error: 'Failed to fetch employees data' }, { status: 500 });
   }
 }

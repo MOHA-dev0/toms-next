@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -102,7 +102,7 @@ model Hotel {
   roomTypes       RoomType[]
   vouchers        Voucher[]
 
-  @@index([cityId], map: "hotels_city_id_fkey")
+  @@index([cityId])
   @@map("hotels")
 }
 
@@ -123,7 +123,7 @@ model RoomType {
   roomPricing     RoomPricing[]
   hotel           Hotel            @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
-  @@index([hotelId], map: "room_types_hotel_id_fkey")
+  @@index([hotelId])
   @@map("room_types")
 }
 
@@ -142,7 +142,7 @@ model RoomPricing {
   quotationHotels QuotationHotel[]
   roomType        RoomType         @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
 
-  @@index([roomTypeId], map: "room_pricing_room_type_id_fkey")
+  @@index([roomTypeId])
   @@map("room_pricing")
 }
 
@@ -151,16 +151,16 @@ model Service {
   cityId            String             @map("city_id")
   nameAr            String             @map("name_ar")
   nameEn            String?            @map("name_en")
-  descriptionAr     String?            @map("description_ar") @db.Text
+  descriptionAr     String?            @map("description_ar")
   purchasePrice     Decimal            @default(0.00) @map("purchase_price") @db.Decimal(10, 2)
   currency          Currency           @default(USD)
   isActive          Boolean            @default(true) @map("is_active")
   createdAt         DateTime           @default(now()) @map("created_at")
-  descriptionEn     String?            @map("description_en") @db.Text
+  descriptionEn     String?            @map("description_en")
   quotationServices QuotationService[]
   city              City               @relation(fields: [cityId], references: [id], onDelete: Cascade)
 
-  @@index([cityId], map: "services_city_id_fkey")
+  @@index([cityId])
   @@map("services")
 }
 
@@ -196,7 +196,7 @@ model Customer {
   phone          String
   nationality    String?
   passportNumber String?     @map("passport_number")
-  notes          String?     @db.Text
+  notes          String?
   createdBy      String?     @map("created_by")
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
@@ -204,7 +204,7 @@ model Customer {
   payments       Payment[]
   quotations     Quotation[]
 
-  @@index([createdBy], map: "customers_created_by_fkey")
+  @@index([createdBy])
   @@map("customers")
 }
 
@@ -226,7 +226,7 @@ model Quotation {
   commissionAmount             Decimal              @default(0.00) @map("commission_amount") @db.Decimal(12, 2)
   totalPrice                   Decimal              @default(0.00) @map("total_price") @db.Decimal(12, 2)
   profit                       Decimal              @default(0.00) @map("profit") @db.Decimal(12, 2)
-  notes                        String?              @db.Text
+  notes                        String?
   createdAt                    DateTime             @default(now()) @map("created_at")
   updatedAt                    DateTime             @updatedAt @map("updated_at")
   paidAmount                   Decimal              @default(0.00) @map("paid_amount") @db.Decimal(12, 2)
@@ -246,11 +246,13 @@ model Quotation {
   salesEmployee                Employee             @relation("SalesEmployee", fields: [salesEmployeeId], references: [id])
   cities_quotationdestinations City[]               @relation("quotationdestinations")
 
-  @@index([agentId], map: "quotations_agent_id_fkey")
-  @@index([companyId], map: "quotations_company_id_fkey")
-  @@index([customerId], map: "quotations_customer_id_fkey")
-  @@index([destinationCityId], map: "quotations_destination_city_id_fkey")
-  @@index([salesEmployeeId], map: "quotations_sales_employee_id_fkey")
+  @@index([agentId])
+  @@index([companyId])
+  @@index([customerId])
+  @@index([destinationCityId])
+  @@index([salesEmployeeId])
+  @@index([status])
+  @@index([updatedAt(sort: Desc)])
   @@map("quotations")
 }
 
@@ -268,7 +270,7 @@ model QuotationHotel {
   board            BoardType    @default(bb)
   purchasePrice    Decimal      @map("purchase_price") @db.Decimal(10, 2)
   sellingPrice     Decimal      @map("selling_price") @db.Decimal(10, 2)
-  notes            String?      @db.Text
+  notes            String?
   originalPrice    Decimal?     @map("original_price") @db.Decimal(10, 2)
   originalCurrency Currency?    @map("original_currency")
   exchangeRate     Decimal?     @map("exchange_rate") @db.Decimal(10, 6)
@@ -278,10 +280,10 @@ model QuotationHotel {
   roomPricing      RoomPricing? @relation(fields: [roomPricingId], references: [id])
   roomType         RoomType     @relation(fields: [roomTypeId], references: [id])
 
-  @@index([hotelId], map: "quotation_hotels_hotel_id_fkey")
-  @@index([quotationId], map: "quotation_hotels_quotation_id_fkey")
-  @@index([roomPricingId], map: "quotation_hotels_room_pricing_id_fkey")
-  @@index([roomTypeId], map: "quotation_hotels_room_type_id_fkey")
+  @@index([hotelId])
+  @@index([quotationId])
+  @@index([roomPricingId])
+  @@index([roomTypeId])
   @@map("quotation_hotels")
 }
 
@@ -291,20 +293,20 @@ model QuotationService {
   serviceId     String?          @map("service_id")
   providerId    String?          @map("provider_id")
   nameAr        String           @map("name_ar")
-  descriptionAr String?          @map("description_ar") @db.Text
+  descriptionAr String?          @map("description_ar")
   quantity      Int              @default(1)
   purchasePrice Decimal          @map("purchase_price") @db.Decimal(10, 2)
   sellingPrice  Decimal          @map("selling_price") @db.Decimal(10, 2)
   serviceDate   DateTime?        @map("service_date") @db.Date
   createdAt     DateTime         @default(now()) @map("created_at")
-  descriptionEn String?          @map("description_en") @db.Text
+  descriptionEn String?          @map("description_en")
+  provider      ServiceProvider? @relation(fields: [providerId], references: [id])
   quotation     Quotation        @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   service       Service?         @relation(fields: [serviceId], references: [id])
-  provider      ServiceProvider? @relation(fields: [providerId], references: [id])
 
-  @@index([quotationId], map: "quotation_services_quotation_id_fkey")
-  @@index([serviceId], map: "quotation_services_service_id_fkey")
-  @@index([providerId], map: "quotation_services_provider_id_fkey")
+  @@index([quotationId])
+  @@index([serviceId])
+  @@index([providerId])
   @@map("quotation_services")
 }
 
@@ -312,8 +314,8 @@ model QuotationFlight {
   id            String    @id @default(uuid())
   quotationId   String    @map("quotation_id")
   departureDate DateTime  @map("departure_date") @db.Date
-  description   String?   @db.Text
-  flightType    String    @map("flight_type") @default("domestic")
+  description   String?
+  flightType    String    @default("domestic") @map("flight_type")
   passengers    Int       @default(1)
   price         Decimal   @db.Decimal(10, 2)
   currency      Currency  @default(USD)
@@ -321,24 +323,24 @@ model QuotationFlight {
   createdAt     DateTime  @default(now()) @map("created_at")
   quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([quotationId], map: "quotation_flights_quotation_id_fkey")
+  @@index([quotationId])
   @@map("quotation_flights")
 }
 
 model QuotationCar {
-  id              String    @id @default(uuid())
-  quotationId     String    @map("quotation_id")
-  pickupDate      DateTime  @map("pickup_date") @db.Date
-  dropoffDate     DateTime  @map("dropoff_date") @db.Date
-  description     String?    @db.Text
-  days            Int       @default(1)
-  pricePerDay     Decimal   @map("price_per_day") @db.Decimal(10, 2)
-  currency        Currency  @default(USD)
-  totalAmount     Decimal   @map("total_amount") @db.Decimal(12, 2)
-  createdAt       DateTime  @default(now()) @map("created_at")
-  quotation       Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  quotationId String    @map("quotation_id")
+  pickupDate  DateTime  @map("pickup_date") @db.Date
+  dropoffDate DateTime  @map("dropoff_date") @db.Date
+  description String?
+  days        Int       @default(1)
+  pricePerDay Decimal   @map("price_per_day") @db.Decimal(10, 2)
+  currency    Currency  @default(USD)
+  totalAmount Decimal   @map("total_amount") @db.Decimal(12, 2)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([quotationId], map: "quotation_cars_quotation_id_fkey")
+  @@index([quotationId])
   @@map("quotation_cars")
 }
 
@@ -348,14 +350,14 @@ model QuotationItinerary {
   dayNumber     Int       @map("day_number")
   date          DateTime  @db.Date
   titleAr       String    @map("title_ar")
-  descriptionAr String?   @map("description_ar") @db.Text
+  descriptionAr String?   @map("description_ar")
   cityId        String?   @map("city_id")
   createdAt     DateTime  @default(now()) @map("created_at")
   city          City?     @relation(fields: [cityId], references: [id])
   quotation     Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([cityId], map: "quotation_itinerary_city_id_fkey")
-  @@index([quotationId], map: "quotation_itinerary_quotation_id_fkey")
+  @@index([cityId])
+  @@index([quotationId])
   @@map("quotation_itinerary")
 }
 
@@ -366,15 +368,15 @@ model Booking {
   bookingEmployeeId String        @map("booking_employee_id")
   status            BookingStatus @default(pending)
   confirmedAt       DateTime?     @map("confirmed_at")
-  notes             String?       @db.Text
+  notes             String?
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
   bookingEmployee   Employee      @relation("BookingEmployee", fields: [bookingEmployeeId], references: [id])
   quotation         Quotation     @relation(fields: [quotationId], references: [id])
   vouchers          Voucher[]
 
-  @@index([bookingEmployeeId], map: "bookings_booking_employee_id_fkey")
-  @@index([quotationId], map: "bookings_quotation_id_fkey")
+  @@index([bookingEmployeeId])
+  @@index([quotationId])
   @@map("bookings")
 }
 
@@ -392,17 +394,17 @@ model Voucher {
   roomTypeTr      String?     @map("room_type_tr")
   boardAr         String?     @map("board_ar")
   boardTr         String?     @map("board_tr")
-  notesAr         String?     @map("notes_ar") @db.Text
-  notesTr         String?     @map("notes_tr") @db.Text
+  notesAr         String?     @map("notes_ar")
+  notesTr         String?     @map("notes_tr")
   createdBy       String?     @map("created_by")
   createdAt       DateTime    @default(now()) @map("created_at")
   booking         Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   createdEmployee Employee?   @relation("VoucherCreatedBy", fields: [createdBy], references: [id])
   hotel           Hotel?      @relation(fields: [hotelId], references: [id])
 
-  @@index([bookingId], map: "vouchers_booking_id_fkey")
-  @@index([createdBy], map: "vouchers_created_by_fkey")
-  @@index([hotelId], map: "vouchers_hotel_id_fkey")
+  @@index([bookingId])
+  @@index([createdBy])
+  @@index([hotelId])
   @@map("vouchers")
 }
 
@@ -413,7 +415,7 @@ model Payment {
   amount          Decimal    @db.Decimal(12, 2)
   paymentMethod   String     @default("نقدي") @map("payment_method")
   paymentDate     DateTime   @default(now()) @map("payment_date") @db.Date
-  notes           String?    @db.Text
+  notes           String?
   createdBy       String?    @map("created_by")
   createdAt       DateTime   @default(now()) @map("created_at")
   receiverName    String?    @map("receiver_name")
@@ -422,9 +424,9 @@ model Payment {
   customer        Customer?  @relation(fields: [customerId], references: [id])
   quotation       Quotation? @relation(fields: [quotationId], references: [id])
 
-  @@index([createdBy], map: "payments_created_by_fkey")
-  @@index([customerId], map: "payments_customer_id_fkey")
-  @@index([quotationId], map: "payments_quotation_id_fkey")
+  @@index([createdBy])
+  @@index([customerId])
+  @@index([quotationId])
   @@map("payments")
 }
 
@@ -469,7 +471,7 @@ model QuotationPassenger {
   createdAt   DateTime  @default(now()) @map("created_at")
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([quotationId], map: "quotation_passengers_quotation_id_fkey")
+  @@index([quotationId])
   @@map("quotation_passengers")
 }
 
@@ -480,6 +482,17 @@ model SystemSequence {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_sequences")
+}
+
+model ServiceProvider {
+  id                String             @id @default(uuid())
+  name              String
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  quotationServices QuotationService[]
+
+  @@map("service_providers")
 }
 
 enum AppRole {
@@ -541,15 +554,4 @@ enum Currency {
   SAR
   AED
   GBP
-}
-
-model ServiceProvider {
-  id                String             @id @default(uuid())
-  name              String
-  isActive          Boolean            @default(true) @map("is_active")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  quotationServices QuotationService[]
-
-  @@map("service_providers")
 }

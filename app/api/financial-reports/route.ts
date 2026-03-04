@@ -68,9 +68,9 @@ export async function GET(request: Request): Promise<NextResponse<FinancialRepor
 
     if (search) {
       whereClause.OR = [
-        { referenceNumber: { contains: search } },
-        { customer: { is: { nameAr: { contains: search } } } },
-        { salesEmployee: { is: { nameAr: { contains: search } } } },
+        { referenceNumber: { contains: search, mode: 'insensitive' } },
+        { customer: { is: { nameAr: { contains: search, mode: 'insensitive' } } } },
+        { salesEmployee: { is: { nameAr: { contains: search, mode: 'insensitive' } } } },
       ];
     }
 

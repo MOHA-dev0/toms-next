@@ -12,38 +12,66 @@ import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-di
 import { DataCard } from '@/components/ui/data-card';
 import { toast } from 'sonner';
 
+interface OtherService {
+  id: string;
+  nameAr: string;
+  nameEn?: string | null;
+  descriptionAr?: string | null;
+  purchasePrice: number;
+  sellingPrice: number;
+  currency: string;
+}
+
 export default function OtherServicesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingService, setEditingService] = useState<any>(null);
+  const [editingService, setEditingService] = useState<OtherService | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
-  // Fetch Other Services
+  // Fetch Other Services (Fetch ONCE, Keep indefinitely in RAM)
   const { data: services = [], isLoading } = useQuery({
     queryKey: ['other-services'],
     queryFn: async () => {
       const res = await api.get('/api/other-services');
       return Array.isArray(res) ? res : [];
-    }
+    },
+    staleTime: Infinity
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       return api.delete(`/api/other-services/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['other-services'] });
-      toast.success('تم حذف الخدمة بنجاح');
-      setDeleteId(null);
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ['other-services'] });
+      const previousServices = queryClient.getQueryData<OtherService[]>(['other-services']);
+      
+      if (previousServices) {
+        queryClient.setQueryData<OtherService[]>(
+          ['other-services'],
+          previousServices.filter(s => s.id !== deletedId)
+        );
+      }
+      return { previousServices };
     },
-    onError: () => {
-      toast.error('حدث خطأ أثناء الحذف');
+    onError: (err, deletedId, context) => {
+      if (context?.previousServices) {
+        queryClient.setQueryData(['other-services'], context.previousServices);
+      }
+      toast.error('حدث خطأ أثناء الحذف.');
+    },
+    onSuccess: () => {
+      toast.success('تم حذف الخدمة بنجاح');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['other-services'] });
+      setDeleteId(null);
     }
   });
 
-  const handleEdit = (service: any) => {
+  const handleEdit = (service: OtherService) => {
     setEditingService(service);
     setIsFormOpen(true);
   };
@@ -53,7 +81,8 @@ export default function OtherServicesPage() {
     if (!open) setEditingService(null);
   };
 
-  const filteredServices = services.filter((service: any) =>
+  // Client-Side Filtering (Instant rendering, 0ms delay)
+  const filteredServices = services.filter((service: OtherService) =>
     service.nameAr.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (service.nameEn && service.nameEn.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -76,7 +105,13 @@ export default function OtherServicesPage() {
           <OtherServiceForm 
             open={isFormOpen} 
             onOpenChange={handleCloseForm}
-            initialData={editingService}
+            initialData={editingService ? {
+              ...editingService,
+              nameEn: editingService.nameEn || '',
+              descriptionAr: editingService.descriptionAr || '',
+              purchasePrice: String(editingService.purchasePrice || '0') as any,
+              sellingPrice: String(editingService.sellingPrice || '0') as any,
+            } : undefined}
           />
         </div>
       </div>
@@ -94,11 +129,11 @@ export default function OtherServicesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" dir="rtl">
-           {filteredServices.map((service: any) => (
+           {filteredServices.map((service: OtherService) => (
              <DataCard
                key={service.id}
                title={service.nameAr}
-               subtitle={service.nameEn}
+               subtitle={service.nameEn || undefined}
                icon={Layers}
                actions={
                  <>

@@ -1,7 +1,8 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, Briefcase, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,45 +25,90 @@ interface Agent {
   id: string
   nameEn: string
   logoUrl?: string
-  isActive: boolean
 }
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentAgent, setCurrentAgent] = useState<Agent | null>(null)
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null)
+  const [formData, setFormData] = useState({ nameEn: '', logoUrl: '' })
   const [searchQuery, setSearchQuery] = useState('')
-  
-  // Form State
-  const [formData, setFormData] = useState({
-    nameEn: '',
-    logoUrl: '',
-  })
-
   const { toast } = useToast()
 
-  const fetchAgents = async () => {
-    try {
+  // 1. DATA FETCHING: CACHE-FIRST
+  const { data: agents = [], isLoading, isPlaceholderData } = useQuery({
+    queryKey: ['agents'],
+    queryFn: async () => {
       const data = await api.get('/api/agents')
-      setAgents(data)
-    } catch (error) {
-      console.error('Failed to fetch agents', error)
+      return Array.isArray(data) ? data : []
+    },
+    staleTime: Infinity, // Reference data: stays in RAM instantly!
+    placeholderData: (prev) => prev
+  })
+
+  // 2. MUTATIONS: CREATE & UPDATE
+  const saveMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id?: string, payload: any }) => {
+      if (id) {
+        return api.put(`/api/agents/${id}`, payload)
+      } else {
+        return api.post('/api/agents', payload)
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      toast({ title: variables.id ? 'تم التحديث بنجاح' : 'تم الإضافة بنجاح' })
+      setIsModalOpen(false)
+      setFormData({ nameEn: '', logoUrl: '' })
+      setCurrentAgent(null)
+    },
+    onError: (error) => {
+      console.error(error)
       toast({ 
         title: 'خطأ',
-        description: 'فشل تحميل قائمة الوكلاء',
+        description: 'حدث خطأ أثناء الحفظ',
         variant: 'destructive'
       })
-    } finally {
-      setIsLoading(false)
     }
-  }
+  })
 
-  useEffect(() => {
-    fetchAgents()
-  }, [])
+  // 3. MUTATIONS: DELETE WITH OPTIMISTIC UPDATES
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/agents/${id}`)
+    },
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ['agents'] })
+      const previous = queryClient.getQueryData<Agent[]>(['agents'])
+      
+      if (previous) {
+        queryClient.setQueryData<Agent[]>(
+          ['agents'], 
+          previous.filter(a => a.id !== deletedId)
+        )
+      }
+      return { previous }
+    },
+    onError: (err, deletedId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['agents'], context.previous)
+      }
+      console.error(err)
+      toast({ 
+        title: 'فشل الحذف',
+        description: 'لا يمكن حذف هذا الوكيل لأنه مرتبط بسجلات أخرى.',
+        variant: 'destructive'
+      })
+    },
+    onSuccess: () => {
+      toast({ title: 'تم الحذف بنجاح' })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['agents'] })
+      setDeleteAgent(null)
+    }
+  })
 
   const handleOpenModal = (agent?: Agent) => {
     if (agent) {
@@ -81,49 +127,17 @@ export default function AgentsPage() {
     setIsModalOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
-
-    try {
-      if (currentAgent) {
-        await api.put(`/api/agents/${currentAgent.id}`, formData)
-        toast({ title: 'تم التحديث بنجاح' })
-      } else {
-        await api.post('/api/agents', formData)
-        toast({ title: 'تم الإضافة بنجاح' })
-      }
-      setIsModalOpen(false)
-      fetchAgents()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'خطأ',
-        description: 'حدث خطأ أثناء الحفظ',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
+    saveMutation.mutate({ 
+      id: currentAgent?.id, 
+      payload: formData 
+    })
   }
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!deleteAgent) return
-
-    try {
-      await api.delete(`/api/agents/${deleteAgent.id}`)
-      toast({ title: 'تم الحذف بنجاح' })
-      fetchAgents()
-    } catch (error) {
-      console.error(error)
-      toast({ 
-        title: 'فشل الحذف',
-        description: 'لا يمكن حذف هذا الوكيل لأنه مرتبط بسجلات أخرى.',
-        variant: 'destructive'
-      })
-    } finally {
-      setDeleteAgent(null)
-    }
+    deleteMutation.mutate(deleteAgent.id)
   }
 
   const filteredAgents = agents.filter(agent => 
@@ -155,7 +169,7 @@ export default function AgentsPage() {
       </div>
 
       {/* Agents Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-300 ${isPlaceholderData ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
         {isLoading ? (
           <div className="col-span-full text-center py-12 text-muted-foreground">جاري التحميل...</div>
         ) : filteredAgents.length === 0 ? (
@@ -238,8 +252,8 @@ export default function AgentsPage() {
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 إلغاء
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-blue-900 hover:bg-blue-800">
-                {isSubmitting ? 'جاري الحفظ...' : 'حفظ'}
+              <Button type="submit" disabled={saveMutation.isPending} className="bg-blue-900 hover:bg-blue-800">
+                {saveMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
               </Button>
             </DialogFooter>
           </form>

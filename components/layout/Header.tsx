@@ -119,6 +119,8 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
     if (pathname === '/dashboard/companies') return { title: 'الشركات', subtitle: 'إدارة الشركات' };
     if (pathname === '/dashboard/agents') return { title: 'الوكالات', subtitle: 'إدارة الوكالات' };
     if (pathname === '/dashboard/employees') return { title: 'الموظفين', subtitle: 'إدارة الموظفين' };
+    if (pathname === '/dashboard/reports') return { title: 'التقارير', subtitle: 'إدارة التقارير' };
+    if (pathname === '/dashboard/financial-reports') return { title: 'التقارير المالية', subtitle: 'إدارة التقارير المالية' };
     return { title: 'TOMS', subtitle: '' };
   };
 

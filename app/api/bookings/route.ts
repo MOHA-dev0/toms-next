@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
           ...(search
             ? {
                 OR: [
-                  { referenceNumber: { contains: search } },
-                  { quotation: { referenceNumber: { contains: search } } },
-                  { vouchers: { some: { voucherCode: { contains: search } } } },
+                  { referenceNumber: { contains: search, mode: 'insensitive' } },
+                  { quotation: { referenceNumber: { contains: search, mode: 'insensitive' } } },
+                  { vouchers: { some: { voucherCode: { contains: search, mode: 'insensitive' } } } },
                 ],
               }
             : {}),
@@ -51,9 +51,9 @@ export async function GET(request: NextRequest) {
           ...(search
             ? {
                 OR: [
-                  { referenceNumber: { contains: search } },
-                  { quotation: { referenceNumber: { contains: search } } },
-                  { vouchers: { some: { voucherCode: { contains: search } } } },
+                  { referenceNumber: { contains: search, mode: 'insensitive' } },
+                  { quotation: { referenceNumber: { contains: search, mode: 'insensitive' } } },
+                  { vouchers: { some: { voucherCode: { contains: search, mode: 'insensitive' } } } },
                 ],
               }
             : {}),
@@ -72,8 +72,8 @@ export async function GET(request: NextRequest) {
         ...(search
           ? {
               OR: [
-                { referenceNumber: { contains: search } },
-                { customer: { nameAr: { contains: search } } },
+                { referenceNumber: { contains: search, mode: 'insensitive' } },
+                { customer: { nameAr: { contains: search, mode: 'insensitive' } } },
               ],
             }
           : {}),
@@ -102,8 +102,8 @@ export async function GET(request: NextRequest) {
         ...(search
           ? {
               OR: [
-                { referenceNumber: { contains: search } },
-                { customer: { nameAr: { contains: search } } },
+                { referenceNumber: { contains: search, mode: 'insensitive' } },
+                { customer: { nameAr: { contains: search, mode: 'insensitive' } } },
               ],
             }
           : {}),
