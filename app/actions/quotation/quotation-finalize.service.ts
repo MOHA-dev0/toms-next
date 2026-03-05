@@ -8,6 +8,7 @@ import {
   calculateFinalFinancials
 } from "./quotation-calculator";
 import { RoomType, RoomPricing, Currency, SourceType } from "@prisma/client";
+import { reportCache } from "@/lib/cache";
 
 export interface FinalizeQuotationData {
   subtotal: number;
@@ -321,6 +322,9 @@ export async function finalizeQuotation(
     maxWait: 5000,
     timeout: 10000,
   });
+
+  // Invalidate any related hotel reports cache
+  reportCache.invalidate('hotel-report-');
 
   return { success: true, referenceNumber: finalReferenceNumber };
 }

@@ -284,6 +284,7 @@ model QuotationHotel {
   @@index([quotationId])
   @@index([roomPricingId])
   @@index([roomTypeId])
+  @@index([checkIn])
   @@map("quotation_hotels")
 }
 
