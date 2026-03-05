@@ -1,320 +1,161 @@
-'use client';
+import { Suspense } from 'react';
+import { unstable_cache } from 'next/cache';
+import prisma from '@/lib/prisma';
+import { redirect } from 'next/navigation';
+import { getUserContext, getAccessFilters } from '@/lib/permissions';
+import BookingsClientView from './components/BookingsClientView';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search, Ticket, CheckCircle, Package, Eye, MoreVertical, FileText, Printer } from 'lucide-react';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+// SECURITY: ensure we never store HTML statically and always check JWT/Cookies
+export const dynamic = 'force-dynamic';
 
-type Tab = 'confirmed' | 'bookings';
+// SAFE CACHING: Uses next cached data layer (without Redis) taking JSON stringified security filters as cache keys
+const getCachedQueries = unstable_cache(
+  async (bFilterJson: string, qFilterJson: string, tab: string, search: string, page: number) => {
+    const limit = 10;
+    const skip = (page - 1) * limit;
 
-export default function BookingsPage() {
-  const router = useRouter();
-  const [tab, setTab] = useState<Tab>('confirmed');
-  const [search, setSearch] = useState('');
-  const [data, setData] = useState<any[]>([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const bFilters = JSON.parse(bFilterJson);
+    const qFilters = JSON.parse(qFilterJson);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const p = new URLSearchParams({ tab, page: page.toString(), limit: '10' });
-      if (search.trim()) p.set('search', search.trim());
-      const res = await fetch(`/api/bookings?${p}`);
-      if (!res.ok) throw new Error();
-      const result = await res.json();
-      // Depending on if it's the old or new API response shape
-      if (result.data) {
-        setData(result.data);
-        setTotalPages(Math.ceil(result.total / result.limit));
-      } else {
-        setData(result);
-        setTotalPages(1);
-      }
-    } catch {
-      toast.error('خطأ في جلب البيانات');
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, search, page]);
-
-  useEffect(() => { 
-    setPage(1); 
-  }, [tab, search]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleConfirmBooking = async (quotationId: string) => {
-    setOpenMenuId(null);
-    if (!confirm('هل تريد إنشاء الفاتورة لهذا العرض؟')) return;
-    setConfirmingId(quotationId);
-    try {
-      const res = await fetch(`/api/bookings/${quotationId}/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        if (err.bookingId) {
-          toast.info('يوجد حجز بالفعل، سيتم التوجيه...');
-          router.push(`/dashboard/bookings/${err.bookingId}`);
-          return;
+    const searchFilterBooking = search
+      ? {
+          OR: [
+            { referenceNumber: { contains: search, mode: 'insensitive' as const } },
+            { quotation: { referenceNumber: { contains: search, mode: 'insensitive' as const } } },
+            { vouchers: { some: { voucherCode: { contains: search, mode: 'insensitive' as const } } } },
+          ],
         }
-        throw new Error(err.error || 'فشل');
-      }
-      const booking = await res.json();
-      toast.success(`تم إنشاء الفواتير بنجاح!`);
-      router.push(`/dashboard/bookings/${booking.id}`);
-    } catch (e: any) {
-      toast.error(e.message || 'فشل في إنشاء الفواتير');
-    } finally {
-      setConfirmingId(null);
+      : {};
+
+    const searchFilterQuotation = search
+      ? {
+          OR: [
+            { referenceNumber: { contains: search, mode: 'insensitive' as const } },
+            { customer: { nameAr: { contains: search, mode: 'insensitive' as const } } },
+          ],
+        }
+      : {};
+
+    if (tab === 'bookings') {
+      const [data, total] = await Promise.all([
+        prisma.booking.findMany({
+          where: { ...bFilters, status: 'confirmed', ...searchFilterBooking },
+          select: { // ONLY Select precisely what is rendered to reduce DB compute & network size
+            id: true,
+            referenceNumber: true,
+            status: true,
+            invoiceNeedsUpdate: true,
+            createdAt: true,
+            quotation: {
+              select: {
+                referenceNumber: true,
+                customer: { select: { nameAr: true } },
+              },
+            },
+            _count: {
+              select: { vouchers: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        prisma.booking.count({ 
+          where: { ...bFilters, status: 'confirmed', ...searchFilterBooking }
+        }),
+      ]);
+      return { data, total, limit };
     }
-  };
 
-  const goToBooking = (q: any) => {
-    setOpenMenuId(null);
-    const bk = q.bookings?.[0];
-    if (bk) router.push(`/dashboard/bookings/${bk.id}`);
-  };
+    // Default: 'confirmed' tab
+    const [data, total] = await Promise.all([
+      prisma.quotation.findMany({
+        where: {
+          ...qFilters,
+          status: 'confirmed',
+          bookings: { none: { status: 'confirmed' } },
+          ...searchFilterQuotation,
+        },
+        select: {
+          id: true,
+          referenceNumber: true,
+          startDate: true,
+          customer: { select: { nameAr: true } },
+          salesEmployee: { select: { nameAr: true } },
+          bookings: { 
+            select: { id: true, status: true },
+            take: 1
+          },
+          _count: {
+            select: { quotationHotels: true, quotationCars: true, passengers: true },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.quotation.count({
+        where: {
+          ...qFilters,
+          status: 'confirmed',
+          bookings: { none: { status: 'confirmed' } },
+          ...searchFilterQuotation,
+        },
+      }),
+    ]);
 
-  const fmt = (d?: string | null) => d ? format(new Date(d), 'dd-MM-yyyy') : '—';
+    return { data, total, limit };
+  },
+  ['bookings-list-cache'], // Built-in Next.js file-system cache
+  { revalidate: 30 }       // Holds data for 30s to reduce DB hits on pagination/refresh
+);
+
+type PageProps = {
+  searchParams: Promise<{ tab?: string; search?: string; page?: string }>;
+};
+
+export default async function BookingsPage({ searchParams }: PageProps) {
+  const user = await getUserContext();
+  if (!user) {
+    redirect('/login');
+  }
+
+  // Next.js 15: searchParams is a Promise
+  const resolvedParams = await searchParams;
+  const tab = (resolvedParams.tab as 'confirmed' | 'bookings') || 'confirmed';
+  const search = resolvedParams.search || '';
+  const page = parseInt(resolvedParams.page || '1', 10);
+
+  // Parse security rules for database query securely at the edge/server level
+  const bFilter = getAccessFilters(user, 'booking');
+  const qFilter = getAccessFilters(user, 'quotation');
+
+  const { data, total, limit } = await getCachedQueries(
+    JSON.stringify(bFilter),
+    JSON.stringify(qFilter),
+    tab,
+    search,
+    page
+  );
+
+  const totalPages = Math.ceil(total / limit) || 1;
 
   return (
-    <div className="flex-1 p-6 space-y-6" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-foreground">الحجوزات والعمليات</h1>
-          <p className="text-sm text-muted-foreground mt-1">إدارة الحجوزات وتوليد الفاوتشرات</p>
-        </div>
-      </div>
-
-      {/* Tabs + Search */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex bg-muted rounded-xl p-1">
-          <button
-            onClick={() => setTab('confirmed')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'confirmed' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <CheckCircle className="w-4 h-4 inline ml-1.5" />
-            العروض المؤكدة (بالانتظار)
-          </button>
-          <button
-            onClick={() => setTab('bookings')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${tab === 'bookings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <Ticket className="w-4 h-4 inline ml-1.5" />
-            الحجوزات (المفوترة)
-          </button>
-        </div>
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="بحث برقم العرض أو اسم العميل أو رقم الفاوتشر..."
-            className="w-full pr-10 pl-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center py-20">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
         </div>
-      ) : data.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground">
-          <Package className="w-12 h-12 mx-auto mb-3 opacity-40" />
-          <p className="text-lg font-bold">{tab === 'confirmed' ? 'لا توجد عروض مؤكدة' : 'لا توجد حجوزات'}</p>
-        </div>
-      ) : tab === 'confirmed' ? (
-        /* ── Confirmed Quotations Table ── */
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50 text-xs text-muted-foreground font-bold border-b border-border">
-                <th className="py-3 px-4 text-right">رقم المرجع</th>
-                <th className="py-3 px-4 text-right">العميل</th>
-                <th className="py-3 px-4 text-right">منشئ العرض</th>
-                <th className="py-3 px-4 text-center">الفنادق</th>
-                <th className="py-3 px-4 text-center">السيارات</th>
-                <th className="py-3 px-4 text-right">التاريخ</th>
-                <th className="py-3 px-4 text-center">الحالة</th>
-                <th className="py-3 px-4 text-center w-14"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((q: any) => {
-                const hasBooking = Array.isArray(q.bookings) && q.bookings.length > 0;
-                const voucherCount = hasBooking ? q.bookings[0]?.vouchers?.length || 0 : 0;
-                return (
-                  <tr key={q.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-4 font-mono text-primary font-bold text-sm">{q.referenceNumber}</td>
-                    <td className="py-3 px-4 text-sm font-medium">{q.customer?.nameAr || '—'}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{q.salesEmployee?.nameAr || '—'}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-bold">{q.quotationHotels?.length || 0}</span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full text-xs font-bold">{q.quotationCars?.length || 0}</span>
-                    </td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{fmt(q.startDate)}</td>
-                    <td className="py-3 px-4 text-center">
-                      {hasBooking ? (
-                        <StatusBadge status={q.bookings[0].status} />
-                      ) : confirmingId === q.id ? (
-                        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full mx-auto" />
-                      ) : (
-                        <span className="bg-amber-100 text-amber-700 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm">
-                          ⏳ بانتظار الإصدار
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-center relative">
-                      <DropdownMenu dir="rtl">
-                        <DropdownMenuTrigger asChild>
-                          <button className="p-1.5 rounded-lg hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/50">
-                            <span className="sr-only">فتح القائمة</span>
-                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 text-right bg-white rounded-xl shadow-lg border border-slate-100 p-2 z-[999]">
-                          {!hasBooking ? (
-                            <DropdownMenuItem 
-                              onClick={() => handleConfirmBooking(q.id)}
-                              className="focus:bg-emerald-50 focus:text-emerald-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
-                            >
-                              <span className="flex-1 text-right">إصدار الفواتير</span>
-                              <FileText className="w-4 h-4 ml-1 opacity-70 text-emerald-600" />
-                            </DropdownMenuItem>
-                          ) : q.bookings[0].status === 'pending' ? (
-                            <>
-                              <DropdownMenuItem 
-                                onClick={() => handleConfirmBooking(q.id)}
-                                className="focus:bg-emerald-50 focus:text-emerald-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
-                              >
-                                <span className="flex-1 text-right">إصدار الفواتير</span>
-                                <FileText className="w-4 h-4 ml-1 opacity-70 text-emerald-600" />
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => goToBooking(q)}
-                                className="focus:bg-blue-50 focus:text-blue-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
-                              >
-                                <span className="flex-1 text-right">عرض الحجز</span>
-                                <Eye className="w-4 h-4 ml-1 opacity-70 text-primary" />
-                              </DropdownMenuItem>
-                            </>
-                          ) : (
-                            <DropdownMenuItem 
-                              onClick={() => goToBooking(q)}
-                              className="focus:bg-blue-50 focus:text-blue-700 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
-                            >
-                              <span className="flex-1 text-right">عرض الفاتورة</span>
-                              <Eye className="w-4 h-4 ml-1 opacity-70 text-primary" />
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem 
-                            onClick={() => router.push(`/dashboard/quotations/${q.id}`)}
-                            className="focus:bg-slate-100 focus:text-slate-800 text-slate-700 cursor-pointer rounded-lg py-2.5 px-3 flex items-center justify-end gap-2 font-medium transition-colors w-full"
-                          >
-                            <span className="flex-1 text-right">عرض المسار</span>
-                            <Printer className="w-4 h-4 ml-1 opacity-70 text-muted-foreground" />
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        /* ── Bookings Table ── */
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-muted/50 text-xs text-muted-foreground font-bold border-b border-border">
-                <th className="py-3 px-4 text-right">رقم الحجز</th>
-                <th className="py-3 px-4 text-right">رقم العرض</th>
-                <th className="py-3 px-4 text-right">العميل</th>
-                <th className="py-3 px-4 text-center">الفاوتشرات</th>
-                <th className="py-3 px-4 text-center">الحالة</th>
-                <th className="py-3 px-4 text-right">التاريخ</th>
-                <th className="py-3 px-4 text-center">عرض</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((b: any) => (
-                <tr key={b.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4 font-mono text-primary font-bold text-sm">{b.referenceNumber}</td>
-                  <td className="py-3 px-4 font-mono text-xs text-muted-foreground">{b.quotation?.referenceNumber || '—'}</td>
-                  <td className="py-3 px-4 text-sm font-medium">{b.quotation?.customer?.nameAr || '—'}</td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold">{b.vouchers?.length || 0}</span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <StatusBadge status={b.status} />
-                  </td>
-                  <td className="py-3 px-4 text-sm text-muted-foreground">{fmt(b.createdAt)}</td>
-                  <td className="py-3 px-4 text-center">
-                    <button
-                      onClick={() => router.push(`/dashboard/bookings/${b.id}`)}
-                      className="bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      التفاصيل
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-6">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition-colors"
-          >
-            السابق
-          </button>
-          <span className="text-sm font-medium text-muted-foreground px-2">
-            صفحة {page} من {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted transition-colors"
-          >
-            التالي
-          </button>
-        </div>
-      )}
-    </div>
+      }
+    >
+      <BookingsClientView
+        initialData={data}
+        total={total}
+        totalPages={totalPages}
+        currentPage={page}
+        currentTab={tab}
+        currentSearch={search}
+      />
+    </Suspense>
   );
 }
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending: { label: 'قيد الانتظار', cls: 'bg-yellow-100 text-yellow-700' },
-    confirmed: { label: 'مؤكد', cls: 'bg-emerald-100 text-emerald-700' },
-    cancelled: { label: 'ملغي', cls: 'bg-red-100 text-red-700' },
-    completed: { label: 'مكتمل', cls: 'bg-blue-100 text-blue-700' },
-  };
-  const s = map[status] || { label: status, cls: 'bg-gray-100 text-gray-700' };
-  return <span className={`${s.cls} px-2.5 py-0.5 rounded-full text-xs font-bold`}>{s.label}</span>;
-}
-

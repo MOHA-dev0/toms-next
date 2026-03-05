@@ -362,21 +362,24 @@ model QuotationItinerary {
 }
 
 model Booking {
-  id                String        @id @default(uuid())
-  referenceNumber   String        @unique @map("reference_number")
-  quotationId       String        @map("quotation_id")
-  bookingEmployeeId String        @map("booking_employee_id")
-  status            BookingStatus @default(pending)
-  confirmedAt       DateTime?     @map("confirmed_at")
-  notes             String?
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
-  bookingEmployee   Employee      @relation("BookingEmployee", fields: [bookingEmployeeId], references: [id])
-  quotation         Quotation     @relation(fields: [quotationId], references: [id])
-  vouchers          Voucher[]
+  id                 String        @id @default(uuid())
+  referenceNumber    String        @unique @map("reference_number")
+  quotationId        String        @map("quotation_id")
+  bookingEmployeeId  String        @map("booking_employee_id")
+  status             BookingStatus @default(pending)
+  confirmedAt        DateTime?     @map("confirmed_at")
+  notes              String?
+  invoiceNeedsUpdate Boolean       @default(false) @map("invoice_needs_update")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  bookingEmployee    Employee      @relation("BookingEmployee", fields: [bookingEmployeeId], references: [id])
+  quotation          Quotation     @relation(fields: [quotationId], references: [id])
+  vouchers           Voucher[]
 
   @@index([bookingEmployeeId])
   @@index([quotationId])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([referenceNumber])
   @@map("bookings")
 }
 

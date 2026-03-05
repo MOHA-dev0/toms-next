@@ -288,6 +288,32 @@ export default function BookingDetailPage() {
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
   };
 
+  const [regenerating, setRegenerating] = useState(false);
+
+  const handleRegenerateInvoice = async () => {
+    if (!confirm('هذا الإجراء سيقوم بحذف كافة فواتير الحجز الحالية وتوليد فواتير جديدة من مسودة عرض الأسعار. هل أنت متأكد؟')) return;
+    
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/bookings/${id}/re-confirm`, { method: 'POST' });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'حدث خطأ غير معروف');
+      }
+      toast.success('تم تحديث الفواتير بناءً على الهيكلة الجديدة!');
+      
+      // Reload the data instead of hard reload
+      const fetchRes = await fetch(`/api/bookings/${id}`);
+      if (fetchRes.ok) {
+        setBooking(await fetchRes.json());
+      }
+    } catch(err: any) {
+      toast.error(err.message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
@@ -311,6 +337,34 @@ export default function BookingDetailPage() {
 
   return (
     <div className="flex-1 p-6 space-y-6" dir="rtl">
+      
+      {/* Structural Modifications Detected Banner */}
+      {booking.invoiceNeedsUpdate && (
+        <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5">
+              <span className="text-xl">⚠️</span>
+            </div>
+            <div>
+              <h2 className="text-rose-800 font-bold text-sm">تعديلات هيكلية جديدة</h2>
+              <p className="text-rose-600 text-xs mt-1 max-w-lg">
+                لقد تم إجراء تعديلات على عرض السعر المؤكد لهذا الحجز (كإضافة/حذف ليالي، تغيير فندق، أو إضافة خدمات). الفواتير والفاوتشرات الحالية قديمة ويجب إعادة توليدها لتعكس أحدث التغييرات.
+              </p>
+            </div>
+          </div>
+          <div>
+            <button 
+              onClick={handleRegenerateInvoice}
+              disabled={regenerating}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors shadow-sm disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {regenerating ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Printer className="w-4 h-4" />}
+              إعادة توليد الفواتير (Sync)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Back + Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/dashboard/bookings')} className="p-2 rounded-lg hover:bg-muted transition-colors">
@@ -334,7 +388,7 @@ export default function BookingDetailPage() {
       </div>
 
       {/* Hotel Vouchers */}
-      {hotelVouchers.length > 0 && (
+      {hotelVouchers.length > 0 && !booking.invoiceNeedsUpdate && (
         <div>
           <h2 className="text-lg font-black text-foreground mb-3 flex items-center gap-2">
             <Building className="w-5 h-5 text-blue-600" /> فاوتشرات الفنادق

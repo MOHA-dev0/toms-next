@@ -179,6 +179,35 @@ export async function finalizeQuotation(
   const validServices = await prisma.service.findMany({ select: { id: true } });
   const validServiceIds = new Set(validServices.map(s => s.id));
 
+  // Track structural changes for confirmed quotations
+  let structuralChangesDetected = false;
+
+  if (existingQuotation.status === 'confirmed') {
+    // 1. Check Hotels change
+    // Using simple length check here, but more complex logic can be added if needed
+    if (state?.hotelSegments) {
+      if (state.hotelSegments.length !== existingQuotation.quotationHotels.length) {
+        structuralChangesDetected = true;
+      } else {
+        // Deep check could be added here; for now, if lengths differ or if it's explicitly modified
+        // In the mapper, new segments don't have IDs of previous ones, which signals a change 
+        structuralChangesDetected = true; 
+      }
+    }
+    
+    // 2. Flights
+    if (state?.isFlightsEnabled !== undefined || state?.flights !== undefined) structuralChangesDetected = true;
+    
+    // 3. Cars
+    if (state?.isCarsEnabled !== undefined || state?.carRentals !== undefined) structuralChangesDetected = true;
+
+    // 4. Services
+    if (state?.itineraryServices !== undefined || state?.otherServices !== undefined) structuralChangesDetected = true;
+
+    // 5. Passengers
+    if (state?.basicInfo?.passengers !== undefined) structuralChangesDetected = true;
+  }
+
   // Single monolithic transaction enforcing atomicity containing all relational deletions and recreations sequentially.
   await prisma.$transaction(async (tx) => {
     const passengers = state?.basicInfo?.passengers;
@@ -276,6 +305,18 @@ export async function finalizeQuotation(
         })
       }
     });
+
+    // If structural changes were detected, mark related booking for invoice regeneration
+    if (structuralChangesDetected && existingQuotation.status === 'confirmed') {
+      await tx.booking.updateMany({
+        where: { quotationId, status: 'confirmed' },
+        data: { invoiceNeedsUpdate: true }
+      });
+      
+      // We ALSO find invalid vouchers that belonged to these deleted structures,
+      // but typically we let the UI tell the user the invoice needs update 
+      // rather than hard deleting here to avoid breaking reference history.
+    }
   }, {
     maxWait: 5000,
     timeout: 10000,

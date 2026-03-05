@@ -115,7 +115,13 @@ export default function StepHotels() {
     queryFn: getQuotationReferenceData,
     staleTime: Infinity,
   });
-  const cities = qData?.cities || [];
+  const allCities = qData?.cities || [];
+
+  // Filter cities to only those selected in Step 1 (destinationCityIds)
+  const selectedCityIds = basicInfo.destinationCityIds || [];
+  const cities = selectedCityIds.length > 0
+    ? allCities.filter(c => selectedCityIds.includes(c.id))
+    : allCities; // Fallback to all cities if none selected (e.g. edit mode)
 
   // Safely grab requested cities from cached dehydrated React Query instance
   const cityIdsString = hotelSegments.map(s => s.cityId).join(',');
@@ -352,8 +358,12 @@ export default function StepHotels() {
   };
 
   const calculateNights = (inDate: Date, outDate: Date) => {
-    const diff = new Date(outDate).getTime() - new Date(inDate).getTime();
-    return Math.max(1, Math.ceil(diff / (1000 * 3600 * 24)));
+    const start = new Date(inDate);
+    const end = new Date(outDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    const diff = end.getTime() - start.getTime();
+    return Math.max(1, Math.round(diff / (1000 * 3600 * 24)));
   };
 
   const totalHotelsCost = hotelSegments.reduce((sum, seg) => {
