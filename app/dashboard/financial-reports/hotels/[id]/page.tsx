@@ -8,25 +8,34 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowRight, Building, CalendarDays, DollarSign, TrendingUp, TrendingDown, Hash, Download, Bed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { ChevronRight, ChevronLeft } from 'lucide-react';
 
 // ── Types ──
 interface HotelDetailBooking {
   quotationHotelId: string;
   quotationId: string;
   referenceNumber: string;
-  customerName: string;
+  channel: string;
+  agency: string;
+  sales: string;
+  voucherNo: string;
   checkIn: string;
   checkOut: string;
   nights: number;
   roomsCount: number;
-  roomTypeName: string;
-  usage: string;
+  room: string;
+  roomTypeSpecification: string;
   board: string;
-  purchasePrice: number;
-  purchasePriceOriginal: number;
+  adults: number;
+  child: number;
+  totalPax: number;
+  cost: number;
+  totalCost: number;
+  salePrice: number;
+  totalSale: number;
+  note: string;
+  names: string;
   originalCurrency: string;
-  sellingPrice: number;
-  profit: number;
 }
 
 interface HotelDetailData {
@@ -43,7 +52,12 @@ interface HotelDetailData {
     totalRooms: number;
     totalPurchase: number;
     totalSelling: number;
-    totalProfit: number;
+  };
+  pagination: {
+    totalRecords: number;
+    totalPages: number;
+    currentPage: number;
+    pageSize: number;
   };
 }
 
@@ -60,13 +74,15 @@ export default function HotelDetailReportPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('cost_profit');
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
   const { data, isLoading, isError, refetch } = useQuery<HotelDetailData>({
-    queryKey: ['hotelDetailReport', hotelId, dateFrom, dateTo],
+    queryKey: ['hotelDetailReport', hotelId, dateFrom, dateTo, page],
     queryFn: async () => {
       const fromParam = dateFrom ? `&from=${dateFrom}` : '';
       const toParam = dateTo ? `&to=${dateTo}` : '';
-      const res = await fetch(`/api/financial-reports/hotels/${hotelId}?_=1${fromParam}${toParam}`);
+      const res = await fetch(`/api/financial-reports/hotels/${hotelId}?page=${page}&pageSize=${pageSize}${fromParam}${toParam}`);
       if (!res.ok) throw new Error('Failed to fetch');
       return res.json();
     },
@@ -80,37 +96,14 @@ export default function HotelDetailReportPage() {
 
   const hotel = data?.hotel;
   const bookings = data?.bookings || [];
-  const summary = data?.summary || { totalBookings: 0, totalNights: 0, totalRooms: 0, totalPurchase: 0, totalSelling: 0, totalProfit: 0 };
-  const profitMargin = summary.totalSelling > 0 ? ((summary.totalProfit / summary.totalSelling) * 100).toFixed(1) : '0';
+  const summary = data?.summary || { totalBookings: 0, totalNights: 0, totalRooms: 0, totalPurchase: 0, totalSelling: 0 };
+  const pagination = data?.pagination || { totalRecords: 0, totalPages: 1, currentPage: 1, pageSize: 25 };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     if (!bookings.length) return;
-    const headers = ['المرجع', 'العميل', 'تسجيل الدخول', 'تسجيل الخروج', 'الليالي', 'الغرف', 'نوع الغرفة', 'الاستخدام', 'الإقامة', 'سعر الشراء', 'سعر البيع', 'الربح'];
-    const rows = bookings.map(b => [
-      b.referenceNumber,
-      b.customerName,
-      format(new Date(b.checkIn), 'yyyy-MM-dd'),
-      format(new Date(b.checkOut), 'yyyy-MM-dd'),
-      b.nights,
-      b.roomsCount,
-      b.roomTypeName,
-      usageLabels[b.usage] || b.usage,
-      boardLabels[b.board] || b.board,
-      b.originalCurrency !== 'USD' ? `${b.purchasePriceOriginal.toFixed(2)} ${b.originalCurrency}` : b.purchasePrice,
-      b.sellingPrice,
-      b.profit,
-    ]);
-
-    // Add BOM for Excel Arabic support
-    const bom = '\uFEFF';
-    const csv = bom + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `hotel-report-${hotel?.nameAr || hotelId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const fromParam = dateFrom ? `&from=${dateFrom}` : '';
+    const toParam = dateTo ? `&to=${dateTo}` : '';
+    window.location.href = `/api/financial-reports/hotels/${hotelId}?export=excel${fromParam}${toParam}`;
   };
 
   return (
@@ -142,7 +135,7 @@ export default function HotelDetailReportPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={bookings.length === 0}
             className="gap-2 bg-white text-slate-600 border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:bg-slate-50 transition-all font-semibold disabled:opacity-40"
           >
@@ -152,7 +145,7 @@ export default function HotelDetailReportPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
           <CardContent className="p-4 flex flex-col items-center justify-center pt-5 pb-5">
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-full mb-2"><Hash size={18} /></div>
@@ -188,13 +181,6 @@ export default function HotelDetailReportPage() {
             <div className="text-xs font-bold text-blue-400">إجمالي البيع</div>
           </CardContent>
         </Card>
-        <Card className="bg-white border-0 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl overflow-hidden transition-all hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.08)]">
-          <CardContent className="p-4 flex flex-col items-center justify-center pt-5 pb-5">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-full mb-2"><TrendingUp size={18} /></div>
-            <div className="text-xl font-black text-emerald-600">{formatCurrency(summary.totalProfit)}</div>
-            <div className="text-xs font-bold text-emerald-400">الربح ({profitMargin}%)</div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters & View Mode */}
@@ -202,13 +188,13 @@ export default function HotelDetailReportPage() {
         {/* Date Range */}
         <div className="flex flex-wrap items-center gap-3 p-1 bg-white/60 backdrop-blur-md border border-slate-200/60 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-xl w-fit">
           <span className="text-xs font-bold text-slate-400 px-2 flex items-center gap-1.5"><CalendarDays size={13} /> الفترة</span>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+          <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
             className="bg-white text-xs font-medium text-slate-700 rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none focus:border-blue-300 transition-all w-[130px]" />
           <span className="text-slate-300 text-xs">—</span>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+          <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
             className="bg-white text-xs font-medium text-slate-700 rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none focus:border-blue-300 transition-all w-[130px]" />
           {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo(''); }}
+            <button onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
               className="text-xs text-rose-500 hover:text-rose-700 font-bold px-2 py-1 rounded-lg hover:bg-rose-50 transition-all">✕</button>
           )}
         </div>
@@ -278,7 +264,6 @@ export default function HotelDetailReportPage() {
                       <>
                         <TableHead className="text-right text-slate-500 font-semibold">سعر الشراء</TableHead>
                         <TableHead className="text-right text-slate-500 font-semibold">سعر البيع</TableHead>
-                        <TableHead className="text-right text-slate-500 font-semibold">الربح</TableHead>
                       </>
                     ) : (
                       <TableHead className="text-right text-slate-500 font-semibold">الإيرادات</TableHead>
@@ -290,13 +275,13 @@ export default function HotelDetailReportPage() {
                     <TableRow key={b.quotationHotelId} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-medium text-slate-500">{idx + 1}</TableCell>
                       <TableCell className="font-bold text-[#25396f]">{b.referenceNumber}</TableCell>
-                      <TableCell className="font-medium text-slate-700">{b.customerName}</TableCell>
+                      <TableCell className="font-medium text-slate-700">{b.names?.substring(0,25) || '-'}</TableCell>
                       <TableCell className="text-slate-600 text-xs">{format(new Date(b.checkIn), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="text-slate-600 text-xs">{format(new Date(b.checkOut), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="font-bold text-slate-700">{b.nights}</TableCell>
                       <TableCell className="font-bold text-slate-700">{b.roomsCount}</TableCell>
-                      <TableCell className="text-slate-600 text-sm">{b.roomTypeName}</TableCell>
-                      <TableCell className="text-slate-600 text-sm">{usageLabels[b.usage] || b.usage}</TableCell>
+                      <TableCell className="text-slate-600 text-sm">{b.room}</TableCell>
+                      <TableCell className="text-slate-600 text-sm">{usageLabels[b.roomTypeSpecification] || b.roomTypeSpecification}</TableCell>
                       <TableCell className="text-slate-600 text-sm">{boardLabels[b.board] || b.board}</TableCell>
                       {viewMode === 'cost_profit' ? (
                         <>
@@ -304,21 +289,18 @@ export default function HotelDetailReportPage() {
                             <div dir="ltr" className="text-right flex flex-col items-end">
                               {b.originalCurrency !== 'USD' ? (
                                 <>
-                                  <span className="text-rose-700">{Number(b.purchasePriceOriginal).toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-xs">{b.originalCurrency}</span></span>
-                                  <span className="text-[10px] text-rose-400 font-medium">({formatCurrency(b.purchasePrice)})</span>
+                                  <span className="text-rose-700">{Number(b.cost).toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-xs">{b.originalCurrency}</span></span>
+                                  <span className="text-[10px] text-rose-400 font-medium">({formatCurrency(b.totalCost)})</span>
                                 </>
                               ) : (
-                                <span>{formatCurrency(b.purchasePrice)}</span>
+                                <span>{formatCurrency(b.totalCost)}</span>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="font-bold text-blue-600">{formatCurrency(b.sellingPrice)}</TableCell>
-                          <TableCell className={cn("font-bold", b.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                            {formatCurrency(b.profit)}
-                          </TableCell>
+                          <TableCell className="font-bold text-blue-600">{formatCurrency(b.totalSale)}</TableCell>
                         </>
                       ) : (
-                        <TableCell className="font-bold text-blue-600">{formatCurrency(b.sellingPrice)}</TableCell>
+                        <TableCell className="font-bold text-blue-600">{formatCurrency(b.totalSale)}</TableCell>
                       )}
                     </TableRow>
                   ))}
@@ -333,9 +315,6 @@ export default function HotelDetailReportPage() {
                       <>
                         <TableCell className="font-black text-rose-700">{formatCurrency(summary.totalPurchase)}</TableCell>
                         <TableCell className="font-black text-blue-700">{formatCurrency(summary.totalSelling)}</TableCell>
-                        <TableCell className={cn("font-black", summary.totalProfit >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                          {formatCurrency(summary.totalProfit)}
-                        </TableCell>
                       </>
                     ) : (
                       <TableCell className="font-black text-blue-700">{formatCurrency(summary.totalSelling)}</TableCell>
@@ -344,6 +323,38 @@ export default function HotelDetailReportPage() {
                 </TableBody>
               </Table>
             </div>
+            
+            {/* Pagination Controls */}
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-slate-100">
+                <div className="text-sm text-slate-500 font-medium">
+                  إجمالي الحجوزات: <span className="font-bold text-slate-700">{pagination.totalRecords}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium text-slate-600 min-w-[3rem] text-center">
+                    {page} / {pagination.totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                    disabled={page === pagination.totalPages}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

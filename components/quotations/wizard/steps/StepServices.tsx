@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, memo, useCallback } from "react";
+import { useShallow } from "zustand/shallow";
 import { useQuotationStore } from "@/lib/store/quotationStore";
 import { getServices, getServiceProviders } from "@/app/actions/quotation-actions";
 import { format, addDays } from "date-fns";
@@ -141,11 +142,13 @@ const DaySection = memo(function DaySection({
   providers: any[];
 }) {
   // Extract list of IDs for this day ONLY
-  const serviceIds = useQuotationStore(useCallback(state => {
-      return state.itineraryServices
+  // useShallow prevents infinite loop: .filter().map() creates a new array ref each render,
+  // but useShallow compares contents instead of reference
+  const serviceIds = useQuotationStore(useShallow(state =>
+      state.itineraryServices
           .filter(s => s.dayNumber === dayNumber)
-          .map(s => s.id);
-  }, [dayNumber]));
+          .map(s => s.id)
+  ));
 
   const addService = useQuotationStore(state => state.addService);
 
